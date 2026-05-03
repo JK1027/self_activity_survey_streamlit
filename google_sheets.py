@@ -4,45 +4,54 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 import json
+import textwrap
 
 class GoogleSheetsManager:
     """
-    구글 스프레드시트 매니저 (JSON 통째로 읽기 버전)
-    TOML의 문자열 처리 오류를 방지하기 위해 JSON 데이터를 직접 파싱합니다.
+    구글 스프레드시트 매니저 (이중 세척 버전)
+    어떠한 환경에서도 키 오염을 방지하기 위해 추출 후 재조립 과정을 거칩니다.
     """
     def __init__(self):
         try:
-            # 1. Secrets에서 GCP_JSON 항목 확인
+            # 1. 인증 정보 가져오기
             if "GCP_JSON" in st.secrets:
-                # JSON 문자열을 딕셔너리로 변환
                 info = json.loads(st.secrets["GCP_JSON"])
             elif "connections" in st.secrets and "gsheets" in st.secrets["connections"]:
-                # 기존 방식 호환용
                 info = dict(st.secrets["connections"]["gsheets"])
-                if "private_key" in info:
-                    pk = info["private_key"].replace("\\n", "\n").strip()
-                    info["private_key"] = pk
             else:
-                st.error("Secrets 설정에 [GCP_JSON] 항목이 없습니다.")
+                st.error("Secrets 설정에 [GCP_JSON] 또는 [connections.gsheets]가 없습니다.")
                 self.connected = False
                 return
 
-            # 2. 인증 및 연결
+            # 2. 프라이빗 키 이중 세척 및 정석 규격(64자) 재조립
+            if "private_key" in info:
+                pk = info["private_key"]
+                # 헤더/푸터 제거 및 모든 형태의 줄바꿈/백슬래시/공백 제거
+                core = pk.replace("-----BEGIN PRIVATE KEY-----", "")
+                core = core.replace("-----END PRIVATE KEY-----", "")
+                core = core.replace("\\n", "").replace("\n", "").replace("\\", "").replace(" ", "").strip()
+                
+                # 64글자마다 줄바꿈 추가하여 표준 PEM 완성
+                wrapped = "\n".join(textwrap.wrap(core, 64))
+                info["private_key"] = f"-----BEGIN PRIVATE KEY-----\n{wrapped}\n-----END PRIVATE KEY-----\n"
+
+            # 3. 인증 및 연결
             scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
             creds = Credentials.from_service_account_info(info, scopes=scopes)
             self.client = gspread.authorize(creds)
             
-            # 3. 시트 열기
+            # 4. 시트 열기
             self.spreadsheet_id = st.secrets["spreadsheet_id"]
             self.sheet = self.client.open_by_key(self.spreadsheet_id)
             self.connected = True
-            st.caption("✓ 구글 시트 연결 성공 (JSON-Direct)")
+            st.caption("✓ 연결 성공 (Double-Cleaned)")
         except Exception as e:
             st.error(f"연결 최종 실패: {e}")
             self.connected = False
 
     def is_connected(self): return self.connected
-
+    
+    # ... (나머지 메서드는 동일하므로 생략하거나 유지)
     def get_today_topic(self):
         if not self.connected: return "연결 오류"
         try:
