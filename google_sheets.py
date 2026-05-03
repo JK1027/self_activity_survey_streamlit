@@ -38,8 +38,12 @@ class GoogleSheetsManager:
             else:
                 self.sheet = None
         except Exception as e:
-            # 연결 실패 시 사용자에게 에러 메시지를 표시합니다.
-            st.error(f"구글 시트 연결 실패: {e}")
+            # 상세 디버깅을 위해 에러 메시지에 키 정보 일부 포함 (나중에 삭제 예정)
+            pk_info = ""
+            if "gcp_service_account" in st.secrets:
+                pk = st.secrets["gcp_service_account"].get("private_key", "")
+                pk_info = f" | KeyLen: {len(pk)} | Start: {pk[:20]}... | End: {pk[-20:]}"
+            st.error(f"구글 시트 연결 실패: {e}{pk_info}")
             self.sheet = None
 
     def is_connected(self):
