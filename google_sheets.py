@@ -10,17 +10,33 @@ class GoogleSheetsManager:
     """
     def __init__(self):
         try:
-            # 별도의 복잡한 인자 전달 없이, secrets의 [connections.gsheets] 섹션을 자동으로 읽도록 합니다.
-            self.conn = st.connection("gsheets", type=GSheetsConnection)
-            self.spreadsheet_id = st.secrets["spreadsheet_id"]
-            self.sheet_url = f"https://docs.google.com/spreadsheets/d/{self.spreadsheet_id}/edit"
-            self.connected = True
+            # 1. secrets에서 정보를 가져와서 수동으로 키를 청소합니다.
+            if "connections" in st.secrets and "gsheets" in st.secrets["connections"]:
+                secret_info = dict(st.secrets["connections"]["gsheets"])
+                if "private_key" in secret_info:
+                    pk = secret_info["private_key"]
+                    # 모든 종류의 인코딩된 줄바꿈(\n, \\n 등)을 실제 줄바꿈 문자로 변환
+                    pk = pk.replace("\\n", "\n").replace("\\\\n", "\n")
+                    secret_info["private_key"] = pk.strip()
+                
+                # secret_info에 있는 'type' 충돌 방지
+                if "type" in secret_info: secret_info.pop("type")
+                
+                # 2. 청소된 정보를 바탕으로 연결 시도
+                self.conn = st.connection("gsheets", type=GSheetsConnection, **secret_info)
+                self.spreadsheet_id = st.secrets["spreadsheet_id"]
+                self.sheet_url = f"https://docs.google.com/spreadsheets/d/{self.spreadsheet_id}/edit"
+                self.connected = True
+                st.caption(f"✓ 연결 성공 (KeyLen: {len(secret_info.get('private_key', ''))})")
+            else:
+                st.error("Secrets 설정에 [connections.gsheets] 섹션이 없습니다.")
+                self.connected = False
         except Exception as e:
             pk_info = ""
             if "connections" in st.secrets and "gsheets" in st.secrets["connections"]:
                 pk = st.secrets["connections"]["gsheets"].get("private_key", "")
-                pk_info = f" | KeyLen: {len(pk)}"
-            st.error(f"[FINAL] 구글 시트 연결 실패: {e}{pk_info}")
+                pk_info = f" | RawLen: {len(pk)}"
+            st.error(f"[FINAL-FIX] 구글 시트 연결 실패: {e}{pk_info}")
             self.connected = False
 
     def is_connected(self):
