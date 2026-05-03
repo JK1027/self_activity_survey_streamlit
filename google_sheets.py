@@ -10,20 +10,17 @@ import json
 
 def _clean_private_key(pk: str) -> str:
     """
-    최종 병기: Base64 데이터를 강제로 바이트로 변환한 뒤, 
-    정석적인 64글자 줄바꿈 PEM 형식으로 재조립합니다.
+    학생용 앱에서 성공한 방식대로, 오직 리터럴 \\n만 실제 줄바꿈으로 바꿉니다.
+    불필요한 세척 과정이 오히려 데이터를 오염시킬 수 있습니다.
     """
-    import re
-    # 1. 헤더/푸터 및 모든 공백/줄바꿈/백슬래시 제거
-    core = pk.replace("-----BEGIN PRIVATE KEY-----", "").replace("-----END PRIVATE KEY-----", "")
-    core = core.replace("\\n", "").replace("\n", "").replace("\r", "").replace(" ", "").replace("\\", "")
-    core = re.sub(r'[^A-Za-z0-9+/=]', '', core)
-    
-    # 2. 64글자마다 줄바꿈 추가 (표준 PEM 규격)
-    lines = [core[i:i+64] for i in range(0, len(core), 64)]
-    clean_body = "\n".join(lines)
-    
-    return f"-----BEGIN PRIVATE KEY-----\n{clean_body}\n-----END PRIVATE KEY-----\n"
+    if not pk:
+        return pk
+    # 리터럴 \n을 실제 줄바꿈으로 변환
+    cleaned = pk.replace("\\n", "\n")
+    # 이미 줄바꿈이 포함된 경우 중복 방지 및 PEM 헤더 정돈
+    if "-----BEGIN PRIVATE KEY-----" not in cleaned:
+        cleaned = f"-----BEGIN PRIVATE KEY-----\n{cleaned}\n-----END PRIVATE KEY-----\n"
+    return cleaned
 
 
 def _get_service_account_info() -> dict:
