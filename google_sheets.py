@@ -3,51 +3,42 @@ from google.oauth2.service_account import Credentials
 import streamlit as st
 import pandas as pd
 from datetime import datetime
-import textwrap
+import json
 
 class GoogleSheetsManager:
     """
-    구글 스프레드시트 매니저 (정석 규격 조립 버전)
-    키를 64글자씩 잘라서 표준 PEM 형식으로 완벽하게 재구성합니다.
+    구글 스프레드시트 매니저 (JSON 통째로 읽기 버전)
+    TOML의 문자열 처리 오류를 방지하기 위해 JSON 데이터를 직접 파싱합니다.
     """
     def __init__(self):
         try:
-            # 1. 인증 정보 가져오기
-            if "connections" in st.secrets and "gsheets" in st.secrets["connections"]:
+            # 1. Secrets에서 GCP_JSON 항목 확인
+            if "GCP_JSON" in st.secrets:
+                # JSON 문자열을 딕셔너리로 변환
+                info = json.loads(st.secrets["GCP_JSON"])
+            elif "connections" in st.secrets and "gsheets" in st.secrets["connections"]:
+                # 기존 방식 호환용
                 info = dict(st.secrets["connections"]["gsheets"])
-            elif "gcp_service_account" in st.secrets:
-                info = dict(st.secrets["gcp_service_account"])
+                if "private_key" in info:
+                    pk = info["private_key"].replace("\\n", "\n").strip()
+                    info["private_key"] = pk
             else:
-                st.error("Secrets 설정에 인증 정보가 없습니다.")
+                st.error("Secrets 설정에 [GCP_JSON] 항목이 없습니다.")
                 self.connected = False
                 return
 
-            # 2. 프라이빗 키 표준 규격(64자 줄바꿈)으로 강제 재구성
-            if "private_key" in info:
-                raw_key = info["private_key"]
-                # 모든 불순물 제거
-                core = raw_key.replace("-----BEGIN PRIVATE KEY-----", "")
-                core = core.replace("-----END PRIVATE KEY-----", "")
-                core = core.replace("\\n", "").replace("\n", "").replace(" ", "").strip()
-                
-                # 64글자마다 줄바꿈 추가 (표준 규격)
-                wrapped_core = "\n".join(textwrap.wrap(core, 64))
-                
-                # 최종 조립
-                info["private_key"] = f"-----BEGIN PRIVATE KEY-----\n{wrapped_core}\n-----END PRIVATE KEY-----\n"
-
-            # 3. 인증 및 연결
+            # 2. 인증 및 연결
             scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
             creds = Credentials.from_service_account_info(info, scopes=scopes)
             self.client = gspread.authorize(creds)
             
-            # 4. 시트 열기
+            # 3. 시트 열기
             self.spreadsheet_id = st.secrets["spreadsheet_id"]
             self.sheet = self.client.open_by_key(self.spreadsheet_id)
             self.connected = True
-            st.caption("✓ 연결 성공 (Standard-PEM)")
+            st.caption("✓ 구글 시트 연결 성공 (JSON-Direct)")
         except Exception as e:
-            st.error(f"연결 실패: {e}")
+            st.error(f"연결 최종 실패: {e}")
             self.connected = False
 
     def is_connected(self): return self.connected
