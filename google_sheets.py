@@ -101,10 +101,21 @@ class GoogleSheetsManager:
         # 방법 2: gspread 직접 연결
         try:
             info = _get_service_account_info()
-            # 디버그: 키 상태 확인
-            pk_debug = info.get("private_key", "")
-            body = pk_debug.replace("-----BEGIN PRIVATE KEY-----", "").replace("-----END PRIVATE KEY-----", "").replace("\n", "")
-            st.caption(f"DEBUG: body_len={len(body)}, first20={body[:20]}, last20={body[-20:]}, method1_err={method1_err}")
+            # 디버그: RAW 키를 secrets에서 직접 추출하여 비교
+            raw_pk = ""
+            if "connections" in st.secrets and "gsheets" in st.secrets["connections"]:
+                raw_pk = st.secrets["connections"]["gsheets"].get("private_key", "")
+            raw_body = raw_pk.replace("-----BEGIN PRIVATE KEY-----", "").replace("-----END PRIVATE KEY-----", "")
+            raw_body = raw_body.replace("\r", "").replace("\n", "").replace(" ", "").strip()
+            st.caption(f"RAW_LEN={len(raw_body)}")
+            st.caption(f"C[0:200]={raw_body[0:200]}")
+            st.caption(f"C[200:400]={raw_body[200:400]}")
+            st.caption(f"C[400:600]={raw_body[400:600]}")
+            st.caption(f"C[600:800]={raw_body[600:800]}")
+            st.caption(f"C[800:1000]={raw_body[800:1000]}")
+            st.caption(f"C[1000:1200]={raw_body[1000:1200]}")
+            st.caption(f"C[1200:1400]={raw_body[1200:1400]}")
+            st.caption(f"C[1400:1629]={raw_body[1400:]}")
             client = _connect_gspread(info)
             self._sheet = client.open_by_key(self.spreadsheet_id)
             self._use_gspread = True
