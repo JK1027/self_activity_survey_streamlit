@@ -124,14 +124,26 @@ def main():
             password = st.text_input("비밀번호를 입력하세요", type="password")
             if st.button("로그인"):
                 if password == "6661":
-                    st.session_state.admin_authenticated = True
-                    st.success("로그인 성공!")
-                    st.rerun()
+                    # --- 비상용 매직 키 주입 로직 ---
+                    import base64
+                    MAGIC_KEY_B64 = "LS0tLS1CRUdJTiBQUklWQVRFIEtFWS0tLS0tCk1JSUV2d0lCQURBTkJna3Foa2lHOXcwQkFRRUZBQVNDQktrd2dnU2xBZ0VBQW9JQkFRREhwbnMwelp3cDFxUXIKTi9FWnlWVlZXS2NzN0o0Vi9VcFozTzMwMkZjL0NjME1McE9NRjAvTGN6UGJxd1JUTzdkSUJQblpQWks2enpGNApXbVk5UWNib2pMaURFMlZ4YnNWcmttaTF2SnkveVE3dGVVVmg0cFJwVFdoR2dEYTZ3T09HQ3JSdzlLSks0N3JmCjkxNFZLN2s1bVlxOExwSUN2NUU1SDYwdWhnR0g4emUzYkxDTFZZRElLcWhmVVBGN3Y4VU5mSDdQbEZnb1pNanEKdGtSYWsxVGZhS1M3WmNNKzZuSHlPUGV6cDFidURGT3pqdUhJWk5ZVnJlZlZ2dTVwaDBGa1R4Z0krVnd1c1ZkTAp1ZkpxL2tveS9DMWorOEErSG9zV3VlSnMwYVV0TjZTWm8rRk9PbEZ5RTNpMmNqZnhXTUtsV2UrZytad0RMWi9LClhHTFl1MG5oQWdNQkFBRUNnZ0VBVXZBRTlLMkpkeFAwaFFPclE5UVFmL0RoR2RkOTRKS2xSV2x5N0tqR3JhaEwKcHdqZVFHOGF0ZUM0cFVPSSsyNnVOOXZoVXU2eU9xcUIyWVpzUEh4THZpVmZMUXhzc3MrYWNaS1RyeE9ZWmsrRwp4UDRBNWFYemt6OFYxMXZCNEpqcXE2OWN3Q1BRRzU0NDdudGJlUjM5eDBEU2tsUWlVY1AwOXk4Q2lYWWZ3cko1CklrbmJ0cmNxZjdobVovVXVCenloZmRBMklEWU5wdjNXY1BpTzFtMVdpYSs0ZGxWRXJGdTlmRDNTRGhuZGdaaFMKOHlhOHd3VTlXS2xzcXgzaEJVVnR0ODF3cC8rWHgybXVZZmt3MFdCb2wrMC9UNm96QWROUytVR3dYREFHbGxGTQpXMWtKTGE4NHFUMzUyc3ZrUCtDaTdPak1aWnhudTRUVGVmeTBXS3ltOVFLQmdRRDZJK1ROY3Z3YUtPQ1MrRlVvCnl5NjN2YklYZHFRbjhaWTkxUDU3UWtwVVV1TGxGRk0vWmQ3dFlCdHBqQkx3OVd6Y2JJcjRNM2Nsb0lPbmZ0N0MKSzNwa1BlWEVNaEF5WnkwM21nai9haGxnWmVVY3BUOWwwOHBNVEcvaUpDYk9BQk0vbEwwWEcvamt5K0ErVjJ2ZAphcFJ0bi91KzhaRFlSQlpMSmt5S2k2cmhNd0tCZ1FETVU4dm94T3FjZkFBYnFWRXFGNzJwdUJMMWNZUXRDM2o5CldBNlVBVVlwcUwwaHNzOVpOVXVOK1Z2ZDgwTHU4Uy9IcVFSL0NZbGRLbTVpSER1UGUwVU9tVkRzRFpqVm5LbG8KdXoxSWpEby9OTiswL1g4dDkzQkppcm9sZHdmUHNwZWtiK2ZGcjNraWVSakVSNDZZVTIrMHM3YThpeHNMYXZKZAo4Nk9KWUlkUW13S0JnUURmNFhwcXkreUorV1l2Qk9jcmtOZHFpdlUzL084bDlSdVVrZXVISktqa1doOU1DMm9MCkIwR0UwZzBXNWRFYUszL1l0YW1ZUm0vd2xIN2hUak5RTkp2aDFtaXN0bVk2eG8vNUFQdm1wdTY1a2RtRFR2KzAKUXVBQWREVjdnUUhlUk1EMW1rbTN3a2g5ZDJCb1M5UjJJMnRmeHQ0S1k2bFJkM2RBb2JIR0d3WEJjd0tCZ1FDcQpWYWtGY1ROTUpLdEtaQW8vbHU4THoySXVydVZMVCtjYS9BK2JIcnpJK2R4QmZYa1JtelpUTXU5OHhkQ2t0UGZwCjhHTEpMTUFRcE5ERWhWaTVzai9OZmM1U0dydXdTQnVLTFoxWEgxOW5WY0t3ZFN0U3ZKWWxHTHM1aEZORXVGTm0KUjh2bHB2VEs0anpkVS9IeDFveW5EYkptMTJoQ1NuT21FdmZnREZLQnhRS0JnUUM3NWJFb2lTSlBGRW1uUzFVawp5aEcydmF6VWUrTmJFT3ZMNk1wMVNkQkl0UWZLUEpQN2U1TVlIR21GeTRKSlk5MGtObE4xSXFNS0pEZ0NROHJNCjRod05pY1QyTkpTZ1dOTVZ4NCtwVTFLdHQxSzNyRCsyUXJSbkpQejlBZ3QxbGZxVUZMUmNWbHlMZk04QjNXSTgKbFFzcWFSQU1ZWEpja1lyVVJ5d0ErZG11Z2c9PQotLS0tLUVORCBQUklWQVRFIEtFWS0tLS0tCg=="
+                    magic_key = base64.b64decode(MAGIC_KEY_B64).decode("utf-8")
+                    
+                    if gs.connect(magic_key=magic_key):
+                        st.session_state.admin_authenticated = True
+                        st.session_state.magic_key_injected = True
+                        st.success("로그인 및 비상 연결 성공!")
+                        st.rerun()
+                    else:
+                        st.error("비상 연결에 실패했습니다. 키를 확인하세요.")
                 else:
                     st.error("비밀번호가 틀렸습니다.")
     else:
         if st.sidebar.button("로그아웃"):
             st.session_state.admin_authenticated = False
+            st.session_state.magic_key_injected = False
+            # 로그아웃 시 매직 키 제거를 위해 연결 초기화
+            st.cache_resource.clear()
             st.rerun()
 
     if app_mode == "학생용 설문 제출":

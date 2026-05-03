@@ -22,30 +22,22 @@ def _clean_private_key(pk: str) -> str:
     return cleaned
 
 
-def _get_service_account_info() -> dict:
-    """Secrets에서 서비스 계정 정보를 읽고, private_key를 세척합니다."""
-    # GCP_JSON이 있으면 최우선
+def _get_service_account_info(magic_key=None) -> dict:
+    """Secrets에서 정보를 읽거나, 비상용 '매직 키'를 주입받습니다."""
     if "GCP_JSON" in st.secrets:
         info = json.loads(st.secrets["GCP_JSON"])
     elif "connections" in st.secrets and "gsheets" in st.secrets["connections"]:
         info = dict(st.secrets["connections"]["gsheets"])
-    elif "gcp_service_account" in st.secrets:
-        info = dict(st.secrets["gcp_service_account"])
     else:
-        raise ValueError("Secrets에 인증 정보가 없습니다.")
+        info = {}
 
-    # split-key 방식 지원
-    pk = info.get("private_key", "")
-    if not pk:
-        k1 = st.secrets.get("key1", "")
-        k2 = st.secrets.get("key2", "")
-        if k1 and k2:
-            pk = k1 + k2
-
-    if not pk:
-        raise ValueError("private_key를 찾을 수 없습니다.")
-
-    info["private_key"] = _clean_private_key(pk)
+    # 매직 키가 있으면 오염된 키 대신 사용
+    if magic_key:
+        info["private_key"] = magic_key
+    else:
+        pk = info.get("private_key", "")
+        info["private_key"] = _clean_private_key(pk)
+    
     return info
 
 
@@ -70,37 +62,57 @@ class GoogleSheetsManager:
     def __init__(self):
         self.connected = False
         self._use_gspread = False
-        self._sheet = None  # gspread용
-        self._conn = None   # GSheetsConnection용
+        self._sheet = None
+        self._conn = None
+        self._magic_key = None # 비상용 키 저장소
 
         try:
             self.spreadsheet_id = st.secrets["spreadsheet_id"]
         except Exception:
-            st.error("Secrets에 spreadsheet_id가 없습니다.")
             return
 
         self.sheet_url = f"https://docs.google.com/spreadsheets/d/{self.spreadsheet_id}/edit"
+        self.connect()
 
-        # 방법 1: GSheetsConnection 시도
-        method1_err = None
+    def connect(self, magic_key=None):
+        """연결을 시도합니다. 매직 키가 주입되면 gspread 방식을 우선하여 강제 연결합니다."""
+        if magic_key:
+            self._magic_key = magic_key
+        
+        # 매직 키가 있으면 gspread(방법 2)로 즉시 강제 연결 (가장 확실함)
+        if self._magic_key:
+            try:
+                info = _get_service_account_info(magic_key=self._magic_key)
+                client = _connect_gspread(info)
+                self._sheet = client.open_by_key(self.spreadsheet_id)
+                self._use_gspread = True
+                self.connected = True
+                return True
+            except Exception as e:
+                st.error(f"비상 연결 실패: {e}")
+                return False
+
+        # 일반적인 경우에는 학생용 방식(방법 1) 우선 시도
         try:
             from streamlit_gsheets import GSheetsConnection
             self._conn = st.connection("gsheets", type=GSheetsConnection)
             self._conn.read(spreadsheet=self.sheet_url, worksheet="Settings", ttl=0)
             self.connected = True
-            return
-        except Exception as e1:
-            method1_err = str(e1)
-
-        # 방법 2: gspread 직접 연결
-        try:
-            info = _get_service_account_info()
-            client = _connect_gspread(info)
-            self._sheet = client.open_by_key(self.spreadsheet_id)
-            self._use_gspread = True
-            self.connected = True
-        except Exception as e:
-            st.error(f"구글 시트 연결 실패. 관리자에게 문의하세요. (오류: {e})")
+            self._use_gspread = False
+            return True
+        except Exception:
+            # 실패하면 gspread(방법 2)로 시도
+            try:
+                info = _get_service_account_info()
+                client = _connect_gspread(info)
+                self._sheet = client.open_by_key(self.spreadsheet_id)
+                self._use_gspread = True
+                self.connected = True
+                return True
+            except Exception as e:
+                if not magic_key: # 매직키 입력 시도가 아닐 때만 에러 표시
+                    st.error(f"구글 시트 연결 실패: {e}")
+                return False
 
     def is_connected(self):
         return self.connected
