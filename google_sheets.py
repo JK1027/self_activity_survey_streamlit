@@ -16,7 +16,7 @@ class GoogleSheetsManager:
             self.sheet_url = f"https://docs.google.com/spreadsheets/d/{self.spreadsheet_id}/edit"
             self.connected = True
         except Exception as e:
-            st.error(f"구글 시트 연결 실패: {e}")
+            st.error(f"[V2] 구글 시트 연결 실패: {e}")
             self.connected = False
 
     def is_connected(self):
