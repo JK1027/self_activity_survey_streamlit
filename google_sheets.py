@@ -1,4 +1,5 @@
-from streamlit_gsheets import GSheetsConnection
+import gspread
+from google.oauth2.service_account import Credentials
 import streamlit as st
 import pandas as pd
 from datetime import datetime
@@ -6,70 +7,80 @@ from datetime import datetime
 class GoogleSheetsManager:
     """
     구글 스프레드시트와 데이터를 주고받는 핵심 로직을 담당하는 클래스입니다.
-    가장 안정적인 Streamlit 공식 연결 방식을 사용합니다.
+    gspread를 직접 사용하여 환경별 키 인코딩 문제를 완벽하게 해결합니다.
     """
     def __init__(self):
         try:
-            # 1. secrets에서 정보를 가져와서 수동으로 키를 청소합니다.
+            # 1. Secrets에서 인증 정보 가져오기
             if "connections" in st.secrets and "gsheets" in st.secrets["connections"]:
-                secret_info = dict(st.secrets["connections"]["gsheets"])
-                if "private_key" in secret_info:
-                    pk = secret_info["private_key"]
-                    # 모든 종류의 인코딩된 줄바꿈(\n, \\n 등)을 실제 줄바꿈 문자로 변환
-                    pk = pk.replace("\\n", "\n").replace("\\\\n", "\n")
-                    secret_info["private_key"] = pk.strip()
-                
-                # secret_info에 있는 'type' 충돌 방지
-                if "type" in secret_info: secret_info.pop("type")
-                
-                # 2. 청소된 정보를 바탕으로 연결 시도
-                self.conn = st.connection("gsheets", type=GSheetsConnection, **secret_info)
-                self.spreadsheet_id = st.secrets["spreadsheet_id"]
-                self.sheet_url = f"https://docs.google.com/spreadsheets/d/{self.spreadsheet_id}/edit"
-                self.connected = True
-                st.caption(f"✓ 연결 성공 (KeyLen: {len(secret_info.get('private_key', ''))})")
+                info = dict(st.secrets["connections"]["gsheets"])
+            elif "gcp_service_account" in st.secrets:
+                info = dict(st.secrets["gcp_service_account"])
             else:
-                st.error("Secrets 설정에 [connections.gsheets] 섹션이 없습니다.")
+                st.error("Secrets 설정에 인증 정보가 없습니다.")
                 self.connected = False
+                return
+
+            # 2. 프라이빗 키 정밀 세척 (가장 중요)
+            if "private_key" in info:
+                pk = info["private_key"]
+                # 문자열 리터럴 \n을 실제 줄바꿈으로 변환
+                pk = pk.replace("\\n", "\n")
+                # 따옴표 세 개 방식 등에서 생길 수 있는 중복 백슬래시 제거
+                pk = pk.replace("\n\n", "\n")
+                info["private_key"] = pk.strip()
+
+            # 3. 인증 및 연결
+            scopes = [
+                "https://www.googleapis.com/auth/spreadsheets",
+                "https://www.googleapis.com/auth/drive"
+            ]
+            creds = Credentials.from_service_account_info(info, scopes=scopes)
+            self.client = gspread.authorize(creds)
+            
+            # 4. 시트 열기
+            self.spreadsheet_id = st.secrets["spreadsheet_id"]
+            self.sheet = self.client.open_by_key(self.spreadsheet_id)
+            self.connected = True
+            st.caption(f"✓ 구글 시트 연결 성공 (gspread)")
         except Exception as e:
-            pk_info = ""
-            if "connections" in st.secrets and "gsheets" in st.secrets["connections"]:
-                pk = st.secrets["connections"]["gsheets"].get("private_key", "")
-                pk_info = f" | RawLen: {len(pk)}"
-            st.error(f"[FINAL-FIX] 구글 시트 연결 실패: {e}{pk_info}")
+            st.error(f"[G-FINAL] 연결 실패: {e}")
             self.connected = False
 
     def is_connected(self):
-        """현재 구글 시트와 연결된 상태인지 확인합니다."""
         return self.connected
 
     def get_today_topic(self):
-        """Settings 탭에서 현재 설정된 '오늘의 주제' 값을 가져옵니다."""
         if not self.connected: return "연결 오류"
         try:
-            df = self.conn.read(spreadsheet=self.sheet_url, worksheet="Settings", ttl=0)
+            ws = self.sheet.worksheet("Settings")
+            data = ws.get_all_records()
+            df = pd.DataFrame(data)
             topic = df[df["Key"] == "today_topic"]["Value"].values[0]
             return topic
         except Exception:
             return "설정된 주제가 없습니다."
 
     def update_today_topic(self, topic):
-        """관리자가 입력한 새로운 주제를 Settings 탭에 저장합니다."""
         if not self.connected: return False
         try:
-            df = self.conn.read(spreadsheet=self.sheet_url, worksheet="Settings", ttl=0)
-            df.loc[df["Key"] == "today_topic", "Value"] = topic
-            self.conn.update(spreadsheet=self.sheet_url, worksheet="Settings", data=df)
+            ws = self.sheet.worksheet("Settings")
+            data = ws.get_all_records()
+            df = pd.DataFrame(data)
+            # 행 번호 찾기 (gspread는 1-based, 헤더 포함이므로 index + 2)
+            idx = df[df["Key"] == "today_topic"].index[0]
+            ws.update_cell(idx + 2, 2, topic)
             return True
         except Exception as e:
             st.error(f"주제 업데이트 실패: {e}")
             return False
 
     def check_existing_response(self, student_id, name, topic):
-        """동일한 주제로 이미 제출한 기록이 있는지 확인합니다."""
         if not self.connected: return None
         try:
-            df = self.conn.read(spreadsheet=self.sheet_url, worksheet="Responses", ttl=0)
+            ws = self.sheet.worksheet("Responses")
+            data = ws.get_all_records()
+            df = pd.DataFrame(data)
             if df.empty: return None
             
             match = df[(df['학번'].astype(str) == str(student_id)) & 
@@ -83,30 +94,25 @@ class GoogleSheetsManager:
             return None
 
     def submit_response(self, student_id, name, topic, content, row_to_update=None):
-        """학생의 응답을 시트에 저장합니다."""
         if not self.connected: return False
         try:
-            df = self.conn.read(spreadsheet=self.sheet_url, worksheet="Responses", ttl=0)
+            ws = self.sheet.worksheet("Responses")
             now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            new_row = [str(student_id), name, topic, content, now]
             
             if row_to_update:
-                idx = row_to_update - 2
-                df.iloc[idx] = [str(student_id), name, topic, content, now]
+                ws.update(f"A{row_to_update}:E{row_to_update}", [new_row])
             else:
-                new_data = pd.DataFrame([[str(student_id), name, topic, content, now]], 
-                                       columns=['학번', '이름', '주제', '소감문', '제출시간'])
-                df = pd.concat([df, new_data], ignore_index=True)
-            
-            self.conn.update(spreadsheet=self.sheet_url, worksheet="Responses", data=df)
+                ws.append_row(new_row)
             return True
         except Exception as e:
             st.error(f"제출 실패: {e}")
             return False
 
     def get_all_responses(self):
-        """모든 응답 데이터를 가져옵니다."""
         if not self.connected: return pd.DataFrame()
         try:
-            return self.conn.read(spreadsheet=self.sheet_url, worksheet="Responses", ttl=0)
+            ws = self.sheet.worksheet("Responses")
+            return pd.DataFrame(ws.get_all_records())
         except Exception:
             return pd.DataFrame()
