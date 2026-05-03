@@ -65,17 +65,20 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 def main():
+    # 구글 시트 매니저 인스턴스 생성
     gs = GoogleSheetsManager()
 
     st.markdown("<h1 class='main-header'>📝 자율활동 설문 제출</h1>", unsafe_allow_html=True)
 
+    # 연결 상태 확인
     if not gs.is_connected():
         st.error("구글 시트가 연결되지 않았습니다. .streamlit/secrets.toml 설정을 확인해주세요.")
         return
 
-    # 오늘의 주제 가져오기
+    # 구글 시트의 Settings 탭에서 '오늘의 주제'를 실시간으로 가져옵니다.
     today_topic = gs.get_today_topic()
     
+    # 주제 표시 레이아웃
     st.markdown(f"""
         <div class='topic-container'>
             <h4 style='margin:0; color:#1565C0;'>오늘의 주제</h4>
@@ -83,6 +86,7 @@ def main():
         </div>
     """, unsafe_allow_html=True)
 
+    # 학생 정보 및 소감문 입력 폼
     with st.form("survey_form", clear_on_submit=False):
         col1, col2 = st.columns(2)
         with col1:
@@ -94,18 +98,20 @@ def main():
         
         submit_btn = st.form_submit_button("제출하기")
 
+    # 제출 버튼 클릭 시 로직
     if submit_btn:
-        # 유효성 검사
+        # 1. 필수 입력 항목 확인
         if not student_id or not student_name or not content:
             st.warning("모든 항목을 입력해주세요.")
+        # 2. 글자 수 제한 확인 (100자 미만 제출 제한)
         elif len(content) < 100:
-            st.error(f"소감문이 너무 짧습니다. (현재 {len(content)}자 / 최소 100자)")
+            st.error(f"소감문이 너무 짧습니다. (현재 {len(content)}자 / 최소 100자 이상 작성해야 합니다.)")
         else:
-            # 중복 체크
+            # 3. 중복 제출 여부 확인 (학번+이름+주제 기준)
             existing_row = gs.check_existing_response(student_id, student_name, today_topic)
             
             if existing_row:
-                # 중복된 경우 세션 상태에 저장하여 다이얼로그 표시 준비
+                # 이미 제출된 기록이 있는 경우: 다이얼로그(팝업)를 통해 덮어쓰기 여부를 묻습니다.
                 st.session_state.pending_data = {
                     "student_id": student_id,
                     "name": student_name,
@@ -115,15 +121,15 @@ def main():
                 }
                 show_overwrite_dialog()
             else:
-                # 신규 제출
+                # 신규 제출인 경우: 바로 시트에 저장합니다.
                 if gs.submit_response(student_id, student_name, today_topic, content):
                     st.success("성공적으로 제출되었습니다!")
                     st.balloons()
                     time.sleep(2)
-                    # st.rerun() # 필요 시 폼 초기화
 
 @st.dialog("이미 제출된 기록이 있습니다.")
 def show_overwrite_dialog():
+    """중복 제출 시 나타나는 확인 팝업창입니다."""
     st.write(f"**{st.session_state.pending_data['name']}** 학생의 동일한 주제에 대한 기록이 이미 존재합니다.")
     st.write("기존 내용을 새로운 소감문으로 덮어쓸까요?")
     
@@ -131,17 +137,19 @@ def show_overwrite_dialog():
     with c1:
         if st.button("예 (업데이트)", use_container_width=True):
             data = st.session_state.pending_data
+            # '예'를 선택하면 기존 행 번호(row)를 사용하여 데이터를 업데이트합니다.
             if gs_instance().submit_response(data['student_id'], data['name'], data['topic'], data['content'], data['row']):
                 st.success("기존 기록이 업데이트되었습니다!")
                 time.sleep(1)
                 del st.session_state.pending_data
-                st.rerun()
+                st.rerun() # 화면을 새로고침하여 반영
     with c2:
         if st.button("아니오 (취소)", use_container_width=True):
+            # '아니오'를 선택하면 작업을 취소하고 팝업을 닫습니다.
             del st.session_state.pending_data
             st.rerun()
 
-# 다이얼로그 내에서 호출하기 위해 인스턴스 캐싱
+# 구글 시트 연결 인스턴스를 캐싱하여 앱의 성능을 최적화합니다.
 @st.cache_resource
 def gs_instance():
     return GoogleSheetsManager()
