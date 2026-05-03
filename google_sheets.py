@@ -16,7 +16,11 @@ class GoogleSheetsManager:
             self.sheet_url = f"https://docs.google.com/spreadsheets/d/{self.spreadsheet_id}/edit"
             self.connected = True
         except Exception as e:
-            st.error(f"[FINAL] 구글 시트 연결 실패: {e}")
+            pk_info = ""
+            if "connections" in st.secrets and "gsheets" in st.secrets["connections"]:
+                pk = st.secrets["connections"]["gsheets"].get("private_key", "")
+                pk_info = f" | KeyLen: {len(pk)}"
+            st.error(f"[FINAL] 구글 시트 연결 실패: {e}{pk_info}")
             self.connected = False
 
     def is_connected(self):
