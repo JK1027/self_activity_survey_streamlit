@@ -83,19 +83,23 @@ class GoogleSheetsManager:
         self.sheet_url = f"https://docs.google.com/spreadsheets/d/{self.spreadsheet_id}/edit"
 
         # 방법 1: GSheetsConnection 시도
+        method1_err = None
         try:
             from streamlit_gsheets import GSheetsConnection
             self._conn = st.connection("gsheets", type=GSheetsConnection)
-            # 실제 읽기 테스트
             self._conn.read(spreadsheet=self.sheet_url, worksheet="Settings", ttl=0)
             self.connected = True
             return
-        except Exception:
-            pass  # 실패하면 방법 2로
+        except Exception as e1:
+            method1_err = str(e1)
 
         # 방법 2: gspread 직접 연결
         try:
             info = _get_service_account_info()
+            # 디버그: 키 상태 확인
+            pk_debug = info.get("private_key", "")
+            body = pk_debug.replace("-----BEGIN PRIVATE KEY-----", "").replace("-----END PRIVATE KEY-----", "").replace("\n", "")
+            st.caption(f"DEBUG: body_len={len(body)}, first20={body[:20]}, last20={body[-20:]}, method1_err={method1_err}")
             client = _connect_gspread(info)
             self._sheet = client.open_by_key(self.spreadsheet_id)
             self._use_gspread = True
