@@ -9,25 +9,23 @@ import json
 # 방법 2: gspread 직접 연결 (fallback)
 
 def _clean_private_key(pk: str) -> str:
-    """어떤 형식의 private key든 표준 PEM으로 재조립합니다."""
+    """PEM 파서를 우회하여 키를 직접 디코딩/재인코딩합니다."""
+    import base64
+    # 헤더/푸터/공백 제거하여 순수 Base64 body 추출
     core = pk.replace("-----BEGIN PRIVATE KEY-----", "")
     core = core.replace("-----END PRIVATE KEY-----", "")
-    len1 = len(core)
     core = core.replace("\\n", "\n")
-    len2 = len(core)
     core = core.replace("\r", "").replace("\n", "").replace(" ", "").strip()
-    len3 = len(core)
-    # 최종 안전망: Base64 유효 문자만 남기기
-    # (리터럴 \n은 이미 줄바꿈으로 변환 후 제거했으므로 stray n 문제 없음)
-    core = re.sub(r'[^A-Za-z0-9+/=]', '', core)
-    len4 = len(core)
-    # 패딩 뒤 여분 제거
-    last_eq = core.rfind("=")
-    if last_eq >= 0 and last_eq < len(core) - 1:
-        core = core[:last_eq + 1]
-    len5 = len(core)
-    st.caption(f"CLEAN: {len1}→{len2}→{len3}→{len4}→{len5}")
-    return f"-----BEGIN PRIVATE KEY-----\n{core}\n-----END PRIVATE KEY-----\n"
+    # Base64 패딩 보정 (길이가 4의 배수가 되도록)
+    padding = (4 - len(core) % 4) % 4
+    core_padded = core + "=" * padding
+    try:
+        # Base64 디코딩 → 재인코딩으로 완벽한 Base64 생성
+        raw_bytes = base64.b64decode(core_padded)
+        clean_b64 = base64.b64encode(raw_bytes).decode("ascii")
+    except Exception:
+        clean_b64 = core  # 실패하면 원본 사용
+    return f"-----BEGIN PRIVATE KEY-----\n{clean_b64}\n-----END PRIVATE KEY-----\n"
 
 
 def _get_service_account_info() -> dict:
