@@ -11,7 +11,6 @@ import json
 def _clean_private_key(pk: str) -> str:
     """
     학생용 앱에서 성공한 방식대로, 오직 리터럴 \\n만 실제 줄바꿈으로 바꿉니다.
-    불필요한 세척 과정이 오히려 데이터를 오염시킬 수 있습니다.
     """
     if not pk:
         return pk
