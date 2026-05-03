@@ -20,6 +20,10 @@ class GoogleSheetsManager:
                     secret_info["private_key"] = pk.strip()
                 
                 # 2. 청소된 정보를 바탕으로 연결 시도
+                # secret_info에 있는 'type'은 구글 서비스 계정용이므로, st.connection의 'type' 인자와 충돌 방지를 위해 제거합니다.
+                if "type" in secret_info:
+                    secret_info.pop("type")
+                
                 self.conn = st.connection("gsheets", type=GSheetsConnection, **secret_info)
                 self.spreadsheet_id = st.secrets["spreadsheet_id"]
                 self.sheet_url = f"https://docs.google.com/spreadsheets/d/{self.spreadsheet_id}/edit"
