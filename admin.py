@@ -24,41 +24,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-def check_password():
-    """관리자 비밀번호를 확인합니다."""
-    def password_entered():
-        # secrets.toml에 admin_password가 정의되어 있지 않으면 기본값 'admin1234' 사용
-        correct_password = st.secrets.get("admin_password", "admin1234")
-        if st.session_state["password"] == correct_password:
-            st.session_state["password_correct"] = True
-            del st.session_state["password"]  # 세션에서 비밀번호 제거
-        else:
-            st.session_state["password_correct"] = False
-
-    if "password_correct" not in st.session_state:
-        # 비밀번호 입력창 표시
-        st.title("🔒 관리자 로그인")
-        st.text_input(
-            "관리자 비밀번호를 입력하세요", type="password", on_change=password_entered, key="password"
-        )
-        if "password_correct" in st.session_state and not st.session_state["password_correct"]:
-            st.error("😕 비밀번호가 일치하지 않습니다.")
-        return False
-    elif not st.session_state["password_correct"]:
-        # 비밀번호가 틀린 경우 다시 입력창 표시
-        st.text_input(
-            "관리자 비밀번호를 입력하세요", type="password", on_change=password_entered, key="password"
-        )
-        st.error("😕 비밀번호가 일치하지 않습니다.")
-        return False
-    else:
-        # 비밀번호가 맞는 경우
-        return True
-
 def main():
-    # 관리자 비밀번호 인증을 확인합니다.
-    if not check_password():
-        return
 
     # 구글 시트 매니저 인스턴스 생성
     gs = GoogleSheetsManager()
