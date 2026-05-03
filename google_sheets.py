@@ -10,17 +10,23 @@ import json
 
 def _clean_private_key(pk: str) -> str:
     """어떤 형식의 private key든 표준 PEM으로 재조립합니다."""
-    # 헤더/푸터 제거
     core = pk.replace("-----BEGIN PRIVATE KEY-----", "")
     core = core.replace("-----END PRIVATE KEY-----", "")
-    # 리터럴 \n(백슬래시+n)을 실제 줄바꿈으로 통일 후 제거
+    len1 = len(core)
     core = core.replace("\\n", "\n")
+    len2 = len(core)
     core = core.replace("\r", "").replace("\n", "").replace(" ", "").strip()
-    # 패딩(=) 뒤의 여분 문자 제거 (클라우드 환경에서 발생하는 오염 방지)
+    len3 = len(core)
+    # 최종 안전망: Base64 유효 문자만 남기기
+    # (리터럴 \n은 이미 줄바꿈으로 변환 후 제거했으므로 stray n 문제 없음)
+    core = re.sub(r'[^A-Za-z0-9+/=]', '', core)
+    len4 = len(core)
+    # 패딩 뒤 여분 제거
     last_eq = core.rfind("=")
     if last_eq >= 0 and last_eq < len(core) - 1:
         core = core[:last_eq + 1]
-    # 표준 PEM 형식으로 재조립
+    len5 = len(core)
+    st.caption(f"CLEAN: {len1}→{len2}→{len3}→{len4}→{len5}")
     return f"-----BEGIN PRIVATE KEY-----\n{core}\n-----END PRIVATE KEY-----\n"
 
 
