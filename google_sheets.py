@@ -9,23 +9,24 @@ import json
 # 방법 2: gspread 직접 연결 (fallback)
 
 def _clean_private_key(pk: str) -> str:
-    """PEM 파서를 우회하여 키를 직접 디코딩/재인코딩합니다."""
-    import base64
-    # 헤더/푸터/공백 제거하여 순수 Base64 body 추출
+    """
+    강력한 세척 로직: 백슬래시(\)와 그 뒤에 오는 문자 하나를 세트로 삭제합니다.
+    이를 통해 \n 뿐만 아니라 \k, \f 등 오염된 문자를 완벽히 제거합니다.
+    """
+    # 1. 헤더/푸터 제거
     core = pk.replace("-----BEGIN PRIVATE KEY-----", "")
     core = core.replace("-----END PRIVATE KEY-----", "")
-    core = core.replace("\\n", "\n")
-    core = core.replace("\r", "").replace("\n", "").replace(" ", "").strip()
-    # Base64 패딩 보정 (길이가 4의 배수가 되도록)
-    padding = (4 - len(core) % 4) % 4
-    core_padded = core + "=" * padding
-    try:
-        # Base64 디코딩 → 재인코딩으로 완벽한 Base64 생성
-        raw_bytes = base64.b64decode(core_padded)
-        clean_b64 = base64.b64encode(raw_bytes).decode("ascii")
-    except Exception:
-        clean_b64 = core  # 실패하면 원본 사용
-    return f"-----BEGIN PRIVATE KEY-----\n{clean_b64}\n-----END PRIVATE KEY-----\n"
+    
+    # 2. 모든 백슬래시(\)와 그 바로 뒤의 문자 하나를 통째로 제거
+    # 예: \n -> 삭제, \k -> 삭제
+    import re
+    core = re.sub(r'\\.', '', core)
+    
+    # 3. 나머지 공백, 줄바꿈, 비-Base64 문자 모두 제거
+    core = re.sub(r'[^A-Za-z0-9+/=]', '', core)
+    
+    # 4. 표준 PEM 형식으로 재조립
+    return f"-----BEGIN PRIVATE KEY-----\n{core}\n-----END PRIVATE KEY-----\n"
 
 
 def _get_service_account_info() -> dict:
@@ -101,30 +102,12 @@ class GoogleSheetsManager:
         # 방법 2: gspread 직접 연결
         try:
             info = _get_service_account_info()
-            # 디버그: 로컬 해시와 비교하여 오염 구간 특정
-            raw_pk = ""
-            if "connections" in st.secrets and "gsheets" in st.secrets["connections"]:
-                raw_pk = st.secrets["connections"]["gsheets"].get("private_key", "")
-            raw_body = raw_pk.replace("-----BEGIN PRIVATE KEY-----", "").replace("-----END PRIVATE KEY-----", "")
-            raw_body = raw_body.replace("\r", "").replace("\n", "").replace(" ", "").strip()
-            import hashlib
-            fine_hashes = {"1000":"08c5ad0a","1050":"7c0a38c4","1100":"19154026","1150":"8eca825c"}
-            results = []
-            for i in [1000,1050,1100,1150]:
-                chunk = raw_body[i:i+50]
-                h = hashlib.md5(chunk.encode()).hexdigest()[:8]
-                expected = fine_hashes.get(str(i), "?")
-                match = "✓" if h == expected else "✗"
-                results.append(f"{i}:{match}")
-                if match == "✗":
-                    results.append(f"CLOUD[{i}:{i+50}]={chunk}")
-            st.caption(" | ".join(results))
             client = _connect_gspread(info)
             self._sheet = client.open_by_key(self.spreadsheet_id)
             self._use_gspread = True
             self.connected = True
         except Exception as e:
-            st.error(f"연결 실패: {e}")
+            st.error(f"구글 시트 연결 실패. 관리자에게 문의하세요. (오류: {e})")
 
     def is_connected(self):
         return self.connected
