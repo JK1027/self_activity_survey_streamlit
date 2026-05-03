@@ -10,17 +10,32 @@ class GoogleSheetsManager:
     """
     def __init__(self):
         try:
-            # st.connection을 통해 구글 시트 연결 (secrets의 정보를 자동으로 사용)
-            self.conn = st.connection("gsheets", type=GSheetsConnection)
-            self.spreadsheet_id = st.secrets["spreadsheet_id"]
-            self.sheet_url = f"https://docs.google.com/spreadsheets/d/{self.spreadsheet_id}/edit"
-            self.connected = True
+            # 1. secrets에서 정보를 가져와서 수동으로 키를 청소합니다.
+            if "connections" in st.secrets and "gsheets" in st.secrets["connections"]:
+                secret_info = dict(st.secrets["connections"]["gsheets"])
+                if "private_key" in secret_info:
+                    pk = secret_info["private_key"]
+                    # 모든 종류의 줄바꿈 예외 처리
+                    pk = pk.replace("\\n", "\n").replace("\\\\n", "\n")
+                    secret_info["private_key"] = pk.strip()
+                
+                # 2. 청소된 정보를 바탕으로 연결 시도
+                self.conn = st.connection("gsheets", type=GSheetsConnection, **secret_info)
+                self.spreadsheet_id = st.secrets["spreadsheet_id"]
+                self.sheet_url = f"https://docs.google.com/spreadsheets/d/{self.spreadsheet_id}/edit"
+                self.connected = True
+                
+                # 성공 시에도 확인용으로 아주 작게 표시 (나중에 삭제)
+                st.caption(f"✓ 연결됨 (Key: {len(secret_info.get('private_key', ''))})")
+            else:
+                st.error("Secrets 설정에 [connections.gsheets] 섹션이 없습니다.")
+                self.connected = False
         except Exception as e:
             pk_info = ""
             if "connections" in st.secrets and "gsheets" in st.secrets["connections"]:
                 pk = st.secrets["connections"]["gsheets"].get("private_key", "")
                 pk_info = f" | KeyLen: {len(pk)}"
-            st.error(f"[V2] 구글 시트 연결 실패: {e}{pk_info}")
+            st.error(f"[V2-Fix] 구글 시트 연결 실패: {e}{pk_info}")
             self.connected = False
 
     def is_connected(self):
