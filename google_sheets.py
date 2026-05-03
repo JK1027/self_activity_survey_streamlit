@@ -5,11 +5,12 @@ import pandas as pd
 from datetime import datetime
 import json
 import textwrap
+import re
 
 class GoogleSheetsManager:
     """
-    구글 스프레드시트 매니저 (이중 세척 버전)
-    어떠한 환경에서도 키 오염을 방지하기 위해 추출 후 재조립 과정을 거칩니다.
+    구글 스프레드시트 매니저 (정규식 필터링 버전)
+    키에서 오직 Base64 유효 문자만 남기고 모든 불순물을 완벽하게 제거합니다.
     """
     def __init__(self):
         try:
@@ -19,19 +20,20 @@ class GoogleSheetsManager:
             elif "connections" in st.secrets and "gsheets" in st.secrets["connections"]:
                 info = dict(st.secrets["connections"]["gsheets"])
             else:
-                st.error("Secrets 설정에 [GCP_JSON] 또는 [connections.gsheets]가 없습니다.")
+                st.error("Secrets 설정에 인증 정보가 없습니다.")
                 self.connected = False
                 return
 
-            # 2. 프라이빗 키 이중 세척 및 정석 규격(64자) 재조립
+            # 2. 프라이빗 키 정밀 수술 (정규식 필터링)
             if "private_key" in info:
                 pk = info["private_key"]
-                # 헤더/푸터 제거 및 모든 형태의 줄바꿈/백슬래시/공백 제거
-                core = pk.replace("-----BEGIN PRIVATE KEY-----", "")
-                core = core.replace("-----END PRIVATE KEY-----", "")
-                core = core.replace("\\n", "").replace("\n", "").replace("\\", "").replace(" ", "").strip()
+                # 헤더/푸터 제거
+                pk = pk.replace("-----BEGIN PRIVATE KEY-----", "").replace("-----END PRIVATE KEY-----", "")
                 
-                # 64글자마다 줄바꿈 추가하여 표준 PEM 완성
+                # 정규식: 영문, 숫자, +, /, = 이외의 모든 문자(줄바꿈, 백슬래시, 공백 등) 제거
+                core = re.sub(r'[^A-Za-z0-9+/=]', '', pk)
+                
+                # 64글자씩 줄바꿈하여 정석 PEM 완성
                 wrapped = "\n".join(textwrap.wrap(core, 64))
                 info["private_key"] = f"-----BEGIN PRIVATE KEY-----\n{wrapped}\n-----END PRIVATE KEY-----\n"
 
@@ -44,14 +46,13 @@ class GoogleSheetsManager:
             self.spreadsheet_id = st.secrets["spreadsheet_id"]
             self.sheet = self.client.open_by_key(self.spreadsheet_id)
             self.connected = True
-            st.caption("✓ 연결 성공 (Double-Cleaned)")
+            st.caption("✓ 구글 시트 연결 성공 (Regex-Secure)")
         except Exception as e:
-            st.error(f"연결 최종 실패: {e}")
+            st.error(f"연결 실패: {e}")
             self.connected = False
 
     def is_connected(self): return self.connected
     
-    # ... (나머지 메서드는 동일하므로 생략하거나 유지)
     def get_today_topic(self):
         if not self.connected: return "연결 오류"
         try:
