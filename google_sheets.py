@@ -108,15 +108,17 @@ class GoogleSheetsManager:
             raw_body = raw_pk.replace("-----BEGIN PRIVATE KEY-----", "").replace("-----END PRIVATE KEY-----", "")
             raw_body = raw_body.replace("\r", "").replace("\n", "").replace(" ", "").strip()
             import hashlib
-            local_hashes = {"0":"6c070a58","200":"4fba3f19","400":"a3cbef30","600":"2d3eaa65","800":"3f0055ac","1000":"2c12daad","1200":"d346f874","1400":"d7802f51","1600":"cd9eaed1"}
+            fine_hashes = {"1000":"08c5ad0a","1050":"7c0a38c4","1100":"19154026","1150":"8eca825c"}
             results = []
-            for i in range(0, len(raw_body), 200):
-                chunk = raw_body[i:i+200]
+            for i in [1000,1050,1100,1150]:
+                chunk = raw_body[i:i+50]
                 h = hashlib.md5(chunk.encode()).hexdigest()[:8]
-                expected = local_hashes.get(str(i), "?")
+                expected = fine_hashes.get(str(i), "?")
                 match = "✓" if h == expected else "✗"
-                results.append(f"{i}:{match}({h})")
-            st.caption(f"RAW_LEN={len(raw_body)} | " + " | ".join(results))
+                results.append(f"{i}:{match}")
+                if match == "✗":
+                    results.append(f"CLOUD[{i}:{i+50}]={chunk}")
+            st.caption(" | ".join(results))
             client = _connect_gspread(info)
             self._sheet = client.open_by_key(self.spreadsheet_id)
             self._use_gspread = True
