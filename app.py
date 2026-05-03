@@ -29,7 +29,8 @@ st.markdown("""
         background-color: #FFD1DC !important; /* 파스텔 핑크 */
         color: #4A4A4A !important;
         border: none !important;
-        padding: 10px 24px !important;
+        padding: 12px 28px !important; /* 높이 확보를 위해 패딩 증가 */
+        min-height: 44px !important;   /* 아이패드 터치 최적화 (룰 준수) */
         font-weight: 600 !important;
         box-shadow: 0 4px 6px rgba(0,0,0,0.05);
         transition: all 0.3s ease;
@@ -90,7 +91,7 @@ def main():
     with st.form("survey_form", clear_on_submit=False):
         col1, col2 = st.columns(2)
         with col1:
-            student_id = st.text_input("학번 (예: 10101)", placeholder="5자리 학번 입력")
+            student_id = st.text_input("학번 (예: 1102)", placeholder="4자리 학번 입력")
         with col2:
             student_name = st.text_input("이름", placeholder="이름 입력")
         
@@ -103,7 +104,10 @@ def main():
         # 1. 필수 입력 항목 확인
         if not student_id or not student_name or not content:
             st.warning("모든 항목을 입력해주세요.")
-        # 2. 글자 수 제한 확인 (100자 미만 제출 제한)
+        # 2. 학번 형식 확인 (4자리 숫자)
+        elif not (len(student_id) == 4 and student_id.isdigit()):
+            st.error("학번은 4자리 숫자로 입력해 주세요. (예: 1학년 1반 2번 → 1102)")
+        # 3. 글자 수 제한 확인 (100자 미만 제출 제한)
         elif len(content) < 100:
             st.error(f"소감문이 너무 짧습니다. (현재 {len(content)}자 / 최소 100자 이상 작성해야 합니다.)")
         else:
