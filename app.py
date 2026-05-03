@@ -106,7 +106,33 @@ def main():
 
     # 사이드바 메뉴 (관리자 기능 통합)
     st.sidebar.title("📱 메뉴 선택")
-    app_mode = st.sidebar.radio("원하는 기능을 선택하세요", ["학생용 설문 제출", "관리자 - 주제 설정", "관리자 - 응답 현황"])
+    
+    # 세션 상태에 로그인 여부 저장
+    if "admin_authenticated" not in st.session_state:
+        st.session_state.admin_authenticated = False
+
+    # 메뉴 옵션 설정
+    menu_options = ["학생용 설문 제출"]
+    if st.session_state.admin_authenticated:
+        menu_options += ["관리자 - 주제 설정", "관리자 - 응답 현황"]
+    
+    app_mode = st.sidebar.radio("원하는 기능을 선택하세요", menu_options)
+
+    # 관리자 로그인 섹션
+    if not st.session_state.admin_authenticated:
+        with st.sidebar.expander("🔐 관리자 로그인"):
+            password = st.text_input("비밀번호를 입력하세요", type="password")
+            if st.button("로그인"):
+                if password == "6661":
+                    st.session_state.admin_authenticated = True
+                    st.success("로그인 성공!")
+                    st.rerun()
+                else:
+                    st.error("비밀번호가 틀렸습니다.")
+    else:
+        if st.sidebar.button("로그아웃"):
+            st.session_state.admin_authenticated = False
+            st.rerun()
 
     if app_mode == "학생용 설문 제출":
         st.markdown("<h1 class='main-header'>📝 자율활동 설문 제출</h1>", unsafe_allow_html=True)
