@@ -4,13 +4,12 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 import json
-import textwrap
 import re
 
 class GoogleSheetsManager:
     """
-    구글 스프레드시트 매니저 (정규식 필터링 버전)
-    키에서 오직 Base64 유효 문자만 남기고 모든 불순물을 완벽하게 제거합니다.
+    구글 스프레드시트 매니저 (Split-Key 버전)
+    키가 너무 길어서 서버에서 잘리는 문제를 해결하기 위해 두 조각으로 나눠서 읽습니다.
     """
     def __init__(self):
         try:
@@ -24,35 +23,36 @@ class GoogleSheetsManager:
                 self.connected = False
                 return
 
-            # 2. 프라이빗 키 정밀 수술 (정규식 필터링)
-            if "private_key" in info:
-                pk = info["private_key"]
-                # 헤더/푸터 제거
-                pk = pk.replace("-----BEGIN PRIVATE KEY-----", "").replace("-----END PRIVATE KEY-----", "")
+            # 2. 조각난 키가 있다면 하나로 합치기 (잘림 방지)
+            pk = info.get("private_key", "")
+            if not pk and "key1" in st.secrets and "key2" in st.secrets:
+                pk = st.secrets["key1"] + st.secrets["key2"]
+            
+            # 3. 프라이빗 키 정밀 세척
+            if pk:
+                # 모든 불순물 제거 및 알맹이만 추출
+                core = pk.replace("-----BEGIN PRIVATE KEY-----", "").replace("-----END PRIVATE KEY-----", "")
+                core = re.sub(r'[^A-Za-z0-9+/=]', '', core)
                 
-                # 정규식: 영문, 숫자, +, /, = 이외의 모든 문자(줄바꿈, 백슬래시, 공백 등) 제거
-                core = re.sub(r'[^A-Za-z0-9+/=]', '', pk)
-                
-                # 64글자씩 줄바꿈하여 정석 PEM 완성
-                wrapped = "\n".join(textwrap.wrap(core, 64))
-                info["private_key"] = f"-----BEGIN PRIVATE KEY-----\n{wrapped}\n-----END PRIVATE KEY-----\n"
+                # 정석대로 재조립 (줄바꿈 없이 한 줄로 처리하는 것이 일부 서버에선 더 안정적일 수 있음)
+                info["private_key"] = f"-----BEGIN PRIVATE KEY-----\n{core}\n-----END PRIVATE KEY-----\n"
 
-            # 3. 인증 및 연결
+            # 4. 인증 및 연결
             scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
             creds = Credentials.from_service_account_info(info, scopes=scopes)
             self.client = gspread.authorize(creds)
             
-            # 4. 시트 열기
             self.spreadsheet_id = st.secrets["spreadsheet_id"]
             self.sheet = self.client.open_by_key(self.spreadsheet_id)
             self.connected = True
-            st.caption("✓ 구글 시트 연결 성공 (Regex-Secure)")
+            st.caption(f"✓ 연결 성공 (Split-Secure | KeyLen: {len(core)})")
         except Exception as e:
-            st.error(f"연결 실패: {e}")
+            st.error(f"연결 최종 실패: {e}")
             self.connected = False
 
     def is_connected(self): return self.connected
     
+    # ... (나머지 메서드는 동일)
     def get_today_topic(self):
         if not self.connected: return "연결 오류"
         try:
