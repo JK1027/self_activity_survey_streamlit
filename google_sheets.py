@@ -101,21 +101,22 @@ class GoogleSheetsManager:
         # 방법 2: gspread 직접 연결
         try:
             info = _get_service_account_info()
-            # 디버그: RAW 키를 secrets에서 직접 추출하여 비교
+            # 디버그: 로컬 해시와 비교하여 오염 구간 특정
             raw_pk = ""
             if "connections" in st.secrets and "gsheets" in st.secrets["connections"]:
                 raw_pk = st.secrets["connections"]["gsheets"].get("private_key", "")
             raw_body = raw_pk.replace("-----BEGIN PRIVATE KEY-----", "").replace("-----END PRIVATE KEY-----", "")
             raw_body = raw_body.replace("\r", "").replace("\n", "").replace(" ", "").strip()
-            st.caption(f"RAW_LEN={len(raw_body)}")
-            st.caption(f"C[0:200]={raw_body[0:200]}")
-            st.caption(f"C[200:400]={raw_body[200:400]}")
-            st.caption(f"C[400:600]={raw_body[400:600]}")
-            st.caption(f"C[600:800]={raw_body[600:800]}")
-            st.caption(f"C[800:1000]={raw_body[800:1000]}")
-            st.caption(f"C[1000:1200]={raw_body[1000:1200]}")
-            st.caption(f"C[1200:1400]={raw_body[1200:1400]}")
-            st.caption(f"C[1400:1629]={raw_body[1400:]}")
+            import hashlib
+            local_hashes = {"0":"6c070a58","200":"4fba3f19","400":"a3cbef30","600":"2d3eaa65","800":"3f0055ac","1000":"2c12daad","1200":"d346f874","1400":"d7802f51","1600":"cd9eaed1"}
+            results = []
+            for i in range(0, len(raw_body), 200):
+                chunk = raw_body[i:i+200]
+                h = hashlib.md5(chunk.encode()).hexdigest()[:8]
+                expected = local_hashes.get(str(i), "?")
+                match = "✓" if h == expected else "✗"
+                results.append(f"{i}:{match}({h})")
+            st.caption(f"RAW_LEN={len(raw_body)} | " + " | ".join(results))
             client = _connect_gspread(info)
             self._sheet = client.open_by_key(self.spreadsheet_id)
             self._use_gspread = True
