@@ -10,23 +10,20 @@ import json
 
 def _clean_private_key(pk: str) -> str:
     """
-    강력한 세척 로직: 백슬래시(\)와 그 뒤에 오는 문자 하나를 세트로 삭제합니다.
-    이를 통해 \n 뿐만 아니라 \k, \f 등 오염된 문자를 완벽히 제거합니다.
+    최종 병기: Base64 데이터를 강제로 바이트로 변환한 뒤, 
+    정석적인 64글자 줄바꿈 PEM 형식으로 재조립합니다.
     """
-    # 1. 헤더/푸터 제거
-    core = pk.replace("-----BEGIN PRIVATE KEY-----", "")
-    core = core.replace("-----END PRIVATE KEY-----", "")
-    
-    # 2. 모든 백슬래시(\)와 그 바로 뒤의 문자 하나를 통째로 제거
-    # 예: \n -> 삭제, \k -> 삭제
     import re
-    core = re.sub(r'\\.', '', core)
-    
-    # 3. 나머지 공백, 줄바꿈, 비-Base64 문자 모두 제거
+    # 1. 헤더/푸터 및 모든 공백/줄바꿈/백슬래시 제거
+    core = pk.replace("-----BEGIN PRIVATE KEY-----", "").replace("-----END PRIVATE KEY-----", "")
+    core = core.replace("\\n", "").replace("\n", "").replace("\r", "").replace(" ", "").replace("\\", "")
     core = re.sub(r'[^A-Za-z0-9+/=]', '', core)
     
-    # 4. 표준 PEM 형식으로 재조립
-    return f"-----BEGIN PRIVATE KEY-----\n{core}\n-----END PRIVATE KEY-----\n"
+    # 2. 64글자마다 줄바꿈 추가 (표준 PEM 규격)
+    lines = [core[i:i+64] for i in range(0, len(core), 64)]
+    clean_body = "\n".join(lines)
+    
+    return f"-----BEGIN PRIVATE KEY-----\n{clean_body}\n-----END PRIVATE KEY-----\n"
 
 
 def _get_service_account_info() -> dict:
