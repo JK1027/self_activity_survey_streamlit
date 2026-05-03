@@ -65,71 +65,109 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
+def admin_topic_setting(gs):
+    st.markdown("<h2 class='main-header'>📍 오늘의 주제 설정</h2>", unsafe_allow_html=True)
+    current_topic = gs.get_today_topic()
+    
+    with st.container():
+        st.info(f"현재 설정된 주제: **{current_topic}**")
+        new_topic = st.text_area("새로운 주제 입력 (학생용 화면에 즉시 반영됩니다)", value=current_topic, height=100)
+        
+        if st.button("설정 저장"):
+            if not new_topic:
+                st.warning("주제를 입력해주세요.")
+            elif gs.update_today_topic(new_topic):
+                st.success("✅ 주제가 성공적으로 변경되었습니다!")
+                st.balloons()
+                st.cache_resource.clear() 
+                st.rerun()
+
+def admin_response_status(gs):
+    st.markdown("<h2 class='main-header'>📊 학생 응답 현황</h2>", unsafe_allow_html=True)
+    df = gs.get_all_responses()
+    
+    if not df.empty:
+        st.write(f"총 **{len(df)}**건의 응답이 있습니다.")
+        st.dataframe(df, use_container_width=True)
+        
+        csv = df.to_csv(index=False).encode('utf-8-sig')
+        st.download_button(
+            label="📥 응답 데이터(CSV) 다운로드",
+            data=csv,
+            file_name="survey_responses.csv",
+            mime="text/csv",
+        )
+    else:
+        st.info("아직 제출된 응답이 없습니다.")
+
 def main():
     # 구글 시트 매니저 인스턴스 생성
-    gs = GoogleSheetsManager()
+    gs = gs_instance()
 
-    st.markdown("<h1 class='main-header'>📝 자율활동 설문 제출</h1>", unsafe_allow_html=True)
+    # 사이드바 메뉴 (관리자 기능 통합)
+    st.sidebar.title("📱 메뉴 선택")
+    app_mode = st.sidebar.radio("원하는 기능을 선택하세요", ["학생용 설문 제출", "관리자 - 주제 설정", "관리자 - 응답 현황"])
 
-    # 연결 상태 확인
-    if not gs.is_connected():
-        st.error("구글 시트가 연결되지 않았습니다. .streamlit/secrets.toml 설정을 확인해주세요.")
-        return
+    if app_mode == "학생용 설문 제출":
+        st.markdown("<h1 class='main-header'>📝 자율활동 설문 제출</h1>", unsafe_allow_html=True)
 
-    # 구글 시트의 Settings 탭에서 '오늘의 주제'를 실시간으로 가져옵니다.
-    today_topic = gs.get_today_topic()
-    
-    # 주제 표시 레이아웃
-    st.markdown(f"""
-        <div class='topic-container'>
-            <h4 style='margin:0; color:#1565C0;'>오늘의 주제</h4>
-            <p style='margin:10px 0 0 0; font-size:1.2rem; font-weight:bold;'>{today_topic}</p>
-        </div>
-    """, unsafe_allow_html=True)
+        # 연결 상태 확인
+        if not gs.is_connected():
+            st.error("구글 시트가 연결되지 않았습니다. Secrets 설정을 확인해주세요.")
+            return
 
-    # 학생 정보 및 소감문 입력 폼
-    with st.form("survey_form", clear_on_submit=False):
-        col1, col2 = st.columns(2)
-        with col1:
-            student_id = st.text_input("학번 (예: 1102)", placeholder="4자리 학번 입력")
-        with col2:
-            student_name = st.text_input("이름", placeholder="이름 입력")
+        # 구글 시트의 Settings 탭에서 '오늘의 주제'를 실시간으로 가져옵니다.
+        today_topic = gs.get_today_topic()
         
-        content = st.text_area("소감문 (100자 이상 입력)", height=250, placeholder="오늘의 주제에 대한 자신의 생각을 자유롭게 적어주세요.")
-        
-        submit_btn = st.form_submit_button("제출하기")
+        # 주제 표시 레이아웃
+        st.markdown(f"""
+            <div class='topic-container'>
+                <h4 style='margin:0; color:#1565C0;'>오늘의 주제</h4>
+                <p style='margin:10px 0 0 0; font-size:1.2rem; font-weight:bold;'>{today_topic}</p>
+            </div>
+        """, unsafe_allow_html=True)
 
-    # 제출 버튼 클릭 시 로직
-    if submit_btn:
-        # 1. 필수 입력 항목 확인
-        if not student_id or not student_name or not content:
-            st.warning("모든 항목을 입력해주세요.")
-        # 2. 학번 형식 확인 (4자리 숫자)
-        elif not (len(student_id) == 4 and student_id.isdigit()):
-            st.error("학번은 4자리 숫자로 입력해 주세요. (예: 1학년 1반 2번 → 1102)")
-        # 3. 글자 수 제한 확인 (100자 미만 제출 제한)
-        elif len(content) < 100:
-            st.error(f"소감문이 너무 짧습니다. (현재 {len(content)}자 / 최소 100자 이상 작성해야 합니다.)")
-        else:
-            # 3. 중복 제출 여부 확인 (학번+이름+주제 기준)
-            existing_row = gs.check_existing_response(student_id, student_name, today_topic)
+        # 학생 정보 및 소감문 입력 폼
+        with st.form("survey_form", clear_on_submit=False):
+            col1, col2 = st.columns(2)
+            with col1:
+                student_id = st.text_input("학번 (예: 1102)", placeholder="4자리 학번 입력")
+            with col2:
+                student_name = st.text_input("이름", placeholder="이름 입력")
             
-            if existing_row:
-                # 이미 제출된 기록이 있는 경우: 다이얼로그(팝업)를 통해 덮어쓰기 여부를 묻습니다.
-                st.session_state.pending_data = {
-                    "student_id": student_id,
-                    "name": student_name,
-                    "topic": today_topic,
-                    "content": content,
-                    "row": existing_row
-                }
-                show_overwrite_dialog()
+            content = st.text_area("소감문 (100자 이상 입력)", height=250, placeholder="오늘의 주제에 대한 자신의 생각을 자유롭게 적어주세요.")
+            
+            submit_btn = st.form_submit_button("제출하기")
+
+        # 제출 버튼 클릭 시 로직
+        if submit_btn:
+            if not student_id or not student_name or not content:
+                st.warning("모든 항목을 입력해주세요.")
+            elif not (len(student_id) == 4 and student_id.isdigit()):
+                st.error("학번은 4자리 숫자로 입력해 주세요. (예: 1학년 1반 2번 → 1102)")
+            elif len(content) < 100:
+                st.error(f"소감문이 너무 짧습니다. (현재 {len(content)}자 / 최소 100자 이상 작성해야 합니다.)")
             else:
-                # 신규 제출인 경우: 바로 시트에 저장합니다.
-                if gs.submit_response(student_id, student_name, today_topic, content):
-                    st.success("성공적으로 제출되었습니다!")
-                    st.balloons()
-                    time.sleep(2)
+                existing_row = gs.check_existing_response(student_id, student_name, today_topic)
+                if existing_row:
+                    st.session_state.pending_data = {
+                        "student_id": student_id,
+                        "name": student_name,
+                        "topic": today_topic,
+                        "content": content,
+                        "row": existing_row
+                    }
+                    show_overwrite_dialog()
+                else:
+                    if gs.submit_response(student_id, student_name, today_topic, content):
+                        st.success("성공적으로 제출되었습니다!")
+                        st.balloons()
+                        time.sleep(2)
+
+    elif app_mode == "관리자 - 주제 설정":
+        admin_topic_setting(gs)
+    elif app_mode == "관리자 - 응답 현황":
+        admin_response_status(gs)
 
 @st.dialog("이미 제출된 기록이 있습니다.")
 def show_overwrite_dialog():
@@ -141,15 +179,13 @@ def show_overwrite_dialog():
     with c1:
         if st.button("예 (업데이트)", use_container_width=True):
             data = st.session_state.pending_data
-            # '예'를 선택하면 기존 행 번호(row)를 사용하여 데이터를 업데이트합니다.
             if gs_instance().submit_response(data['student_id'], data['name'], data['topic'], data['content'], data['row']):
                 st.success("기존 기록이 업데이트되었습니다!")
                 time.sleep(1)
                 del st.session_state.pending_data
-                st.rerun() # 화면을 새로고침하여 반영
+                st.rerun()
     with c2:
         if st.button("아니오 (취소)", use_container_width=True):
-            # '아니오'를 선택하면 작업을 취소하고 팝업을 닫습니다.
             del st.session_state.pending_data
             st.rerun()
 
