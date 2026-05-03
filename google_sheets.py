@@ -18,10 +18,14 @@ class GoogleSheetsManager:
         try:
             # Streamlit의 secrets 기능을 사용하여 보안 정보(JSON 키 등)를 안전하게 불러옵니다.
             if "gcp_service_account" in st.secrets:
-                # secrets 정보를 딕셔너리로 가져와서 private_key의 줄바꿈 문자를 처리합니다.
+                # secrets 정보를 딕셔너리로 가져와서 여러 형식의 줄바꿈 문자를 통합 처리합니다.
                 info = dict(st.secrets["gcp_service_account"])
                 if "private_key" in info:
-                    info["private_key"] = info["private_key"].replace("\\n", "\n")
+                    pk = info["private_key"]
+                    # 여러 환경의 이스케이프 문자 대응
+                    pk = pk.replace("\\n", "\n").replace("\\\\n", "\n")
+                    # 혹시 모를 앞뒤 공백 제거
+                    info["private_key"] = pk.strip()
                 
                 self.creds = Credentials.from_service_account_info(
                     info,
