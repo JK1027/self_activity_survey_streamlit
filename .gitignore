@@ -13,3 +13,7 @@ secrets.toml
 # OS
 .DS_Store
 Thumbs.db
+
+.venv/
+.streamlit/secrets.toml
+*.json
