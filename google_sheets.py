@@ -13,9 +13,13 @@ def _clean_private_key(pk: str) -> str:
     # 헤더/푸터 제거
     core = pk.replace("-----BEGIN PRIVATE KEY-----", "")
     core = core.replace("-----END PRIVATE KEY-----", "")
-    # Base64 유효 문자(A-Z, a-z, 0-9, +, /, =)만 남기고 모두 제거
-    core = re.sub(r'[^A-Za-z0-9+/=]', '', core)
-    # 표준 PEM 형식으로 재조립 (줄바꿈 없이 한 덩어리)
+    # 핵심: 리터럴 \n(백슬래시+n)을 먼저 제거해야 n이 남지 않음
+    core = core.replace("\\n", "\n")   # 리터럴 \n → 실제 줄바꿈으로 통일
+    core = core.replace("\r", "")      # CR 제거
+    core = core.replace("\n", "")      # 줄바꿈 제거
+    core = core.replace(" ", "")       # 공백 제거
+    core = core.strip()
+    # 표준 PEM 형식으로 재조립
     return f"-----BEGIN PRIVATE KEY-----\n{core}\n-----END PRIVATE KEY-----\n"
 
 
