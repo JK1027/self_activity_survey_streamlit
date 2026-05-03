@@ -1,4 +1,4 @@
-﻿import streamlit as st
+import streamlit as st
 import pandas as pd
 from google_sheets import GoogleSheetsManager
 import time
@@ -7,13 +7,13 @@ import json
 
 st.set_page_config(page_title="자율활동 설문 시스템", page_icon="📝", layout="centered")
 
-st.markdown(\"\"\"
+st.markdown("""
 <style>
     .main-header { text-align: center; color: #1E88E5; margin-bottom: 30px; }
     .topic-container { background-color: #E3F2FD; padding: 20px; border-radius: 10px; border-left: 5px solid #1E88E5; margin-bottom: 25px; }
     .stButton>button { width: 100%; border-radius: 5px; height: 3em; background-color: #1E88E5; color: white; }
 </style>
-\"\"\", unsafe_allow_html=True)
+""", unsafe_allow_html=True)
 
 def admin_topic_setting(gs):
     st.markdown("<h1 class='main-header'>📍 오늘의 주제 설정</h1>", unsafe_allow_html=True)
@@ -44,30 +44,30 @@ def main():
                 st.session_state.magic_key_fixed = True
         except: pass
 
-    st.sidebar.title(\"📱 메뉴 선택\")
-    app_mode = st.sidebar.radio(\"기능 선택\", [\"학생용 설문 제출\", \"관리자 - 주제 설정\", \"관리자 - 응답 현황\"])
+    st.sidebar.title("📱 메뉴 선택")
+    app_mode = st.sidebar.radio("기능 선택", ["학생용 설문 제출", "관리자 - 주제 설정", "관리자 - 응답 현황"])
 
-    if app_mode == \"학생용 설문 제출\":
-        st.markdown(\"<h1 class='main-header'>📝 자율활동 설문 제출</h1>\", unsafe_allow_html=True)
+    if app_mode == "학생용 설문 제출":
+        st.markdown("<h1 class='main-header'>📝 자율활동 설문 제출</h1>", unsafe_allow_html=True)
         if not gs.is_connected():
-            st.error(\"연결 오류\")
+            st.error("연결 오류")
             return
         today_topic = gs.get_today_topic()
-        st.markdown(f\"<div class='topic-container'>오늘의 주제: <b>{today_topic}</b></div>\", unsafe_allow_html=True)
-        with st.form(\"survey_form\"):
-            sid = st.text_input(\"학번 (예: 1102)\")
-            name = st.text_input(\"이름\")
-            txt = st.text_area(\"소감문 (100자 이상)\", height=200)
-            if st.form_submit_button(\"제출하기\"):
+        st.markdown(f"<div class='topic-container'>오늘의 주제: <b>{today_topic}</b></div>", unsafe_allow_html=True)
+        with st.form("survey_form"):
+            sid = st.text_input("학번 (예: 1102)")
+            name = st.text_input("이름")
+            txt = st.text_area("소감문 (100자 이상)", height=200)
+            if st.form_submit_button("제출하기"):
                 if sid and name and len(txt) >= 100:
                     if gs.submit_response(sid, name, today_topic, txt):
-                        st.success(\"제출 완료!\")
+                        st.success("제출 완료!")
                         st.balloons()
-                else: st.warning(\"입력 확인 (학번/이름/소감문 100자)\")
-    elif app_mode == \"관리자 - 주제 설정\": admin_topic_setting(gs)
-    elif app_mode == \"관리자 - 응답 현황\": admin_response_status(gs)
+                else: st.warning("입력 확인 (학번/이름/소감문 100자)")
+    elif app_mode == "관리자 - 주제 설정": admin_topic_setting(gs)
+    elif app_mode == "관리자 - 응답 현황": admin_response_status(gs)
 
-@st.dialog(\"중복 제출 확인\")
+@st.dialog("중복 제출 확인")
 def show_overwrite_dialog(): pass
 
 @st.cache_resource
