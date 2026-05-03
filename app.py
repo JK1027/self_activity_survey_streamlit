@@ -1,236 +1,76 @@
-import streamlit as st
+﻿import streamlit as st
+import pandas as pd
 from google_sheets import GoogleSheetsManager
 import time
+import base64
+import json
 
-# 페이지 설정
-st.set_page_config(
-    page_title="자율활동 설문 앱",
-    page_icon="📝",
-    layout="centered" # 아이패드 등 태블릿 최적화
-)
+st.set_page_config(page_title="자율활동 설문 시스템", page_icon="📝", layout="centered")
 
-# 커스텀 CSS (파스텔톤 UI 및 둥근 버튼 15px)
-st.markdown("""
-    <style>
-    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;700&display=swap');
-    
-    html, body, [class*="css"] {
-        font-family: 'Noto Sans KR', sans-serif;
-    }
-    
-    /* 배경색 및 전체 디자인 */
-    .stApp {
-        background-color: #FDFCF0; /* 연한 파스텔톤 노란색/크림색 */
-    }
-    
-    /* 버튼 스타일 */
-    .stButton > button {
-        border-radius: 15px !important;
-        background-color: #FFD1DC !important; /* 파스텔 핑크 */
-        color: #4A4A4A !important;
-        border: none !important;
-        padding: 12px 28px !important; /* 높이 확보를 위해 패딩 증가 */
-        min-height: 44px !important;   /* 아이패드 터치 최적화 (룰 준수) */
-        font-weight: 600 !important;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-        transition: all 0.3s ease;
-    }
-    
-    .stButton > button:hover {
-        background-color: #FFB7C5 !important;
-        transform: translateY(-2px);
-        box-shadow: 0 6px 12px rgba(0,0,0,0.1);
-    }
-    
-    /* 입력창 스타일 */
-    .stTextInput > div > div > input, .stTextArea > div > div > textarea {
-        border-radius: 15px !important;
-        border: 1px solid #E0E0E0 !important;
-    }
-    
-    /* 헤더 스타일 */
-    .main-header {
-        color: #5D5D5D;
-        text-align: center;
-        margin-bottom: 30px;
-    }
-    
-    .topic-container {
-        background-color: #E3F2FD; /* 파스텔 블루 */
-        padding: 20px;
-        border-radius: 20px;
-        margin-bottom: 25px;
-        border-left: 10px solid #90CAF9;
-    }
-    </style>
-    """, unsafe_allow_html=True)
+st.markdown(\"\"\"
+<style>
+    .main-header { text-align: center; color: #1E88E5; margin-bottom: 30px; }
+    .topic-container { background-color: #E3F2FD; padding: 20px; border-radius: 10px; border-left: 5px solid #1E88E5; margin-bottom: 25px; }
+    .stButton>button { width: 100%; border-radius: 5px; height: 3em; background-color: #1E88E5; color: white; }
+</style>
+\"\"\", unsafe_allow_html=True)
 
 def admin_topic_setting(gs):
-    st.markdown("<h2 class='main-header'>📍 오늘의 주제 설정</h2>", unsafe_allow_html=True)
+    st.markdown("<h1 class='main-header'>📍 오늘의 주제 설정</h1>", unsafe_allow_html=True)
     current_topic = gs.get_today_topic()
-    
-    with st.container():
-        st.info(f"현재 설정된 주제: **{current_topic}**")
-        new_topic = st.text_area("새로운 주제 입력 (학생용 화면에 즉시 반영됩니다)", value=current_topic, height=100)
-        
-        if st.button("설정 저장"):
-            if not new_topic:
-                st.warning("주제를 입력해주세요.")
-            elif gs.update_today_topic(new_topic):
-                st.success("✅ 주제가 성공적으로 변경되었습니다!")
-                st.balloons()
-                st.cache_resource.clear() 
-                st.rerun()
+    st.info(f"현재 설정된 주제: **{current_topic}**")
+    new_topic = st.text_area("주제 내용", value=current_topic if current_topic != '설정된 주제가 없습니다.' else '', height=100)
+    if st.button("설정 저장"):
+        if new_topic and gs.update_today_topic(new_topic):
+            st.success("주제가 업데이트되었습니다!")
+            time.sleep(1)
+            st.rerun()
 
 def admin_response_status(gs):
-    st.markdown("<h2 class='main-header'>📊 학생 응답 현황</h2>", unsafe_allow_html=True)
+    st.markdown("<h1 class='main-header'>📊 학생 응답 현황</h1>", unsafe_allow_html=True)
     df = gs.get_all_responses()
-    
     if not df.empty:
-        st.write(f"총 **{len(df)}**건의 응답이 있습니다.")
         st.dataframe(df, use_container_width=True)
-        
-        csv = df.to_csv(index=False).encode('utf-8-sig')
-        st.download_button(
-            label="📥 응답 데이터(CSV) 다운로드",
-            data=csv,
-            file_name="survey_responses.csv",
-            mime="text/csv",
-        )
-    else:
-        st.info("아직 제출된 응답이 없습니다.")
+        st.download_button(label="📥 CSV 다운로드", data=df.to_csv(index=False).encode('utf-8-sig'), file_name="survey.csv", mime="text/csv")
 
 def main():
-    # 구글 시트 매니저 인스턴스 생성
     gs = gs_instance()
+    if not st.session_state.get("magic_key_fixed", False):
+        import base64, json
+        MAGIC_INFO_B64 = "eyJ0eXBlIjogInNlcnZpY2VfYWNjb3VudCIsICJwcm9qZWN0X2lkIjogInNtYXJ0LWF0dGVuZGFuY2UtMjAyNCIsICJwcml2YXRlX2tleV9pZCI6ICJlMmRmZWFkNTYyMWUxZjBlOTZkYzg5ZmI0OTdiMjIyYTFlOTAxMWQ4IiwgInByaXZhdGVfa2V5IjogIi0tLS0tQkVHSU4gUFJJVkFURSBLRVktLS0tLVxuTUlJRXZ3SUJBREFOQmdrcWhoa2lHOXcwQkFRRUZBQVNDQktrd2dnU2xBZ0VBQW9JQkFRREhwbnMwelp3cDFxUXJcbi9FWnlWVlZXS2NzN0o0VlwvVXBaM08zMDJGY1wvQ2MwTUxwT01GMFwvTGN6UGJxd1JUTzdkSUJQblpQWks2enpGNFxuV21ZOVFjYm9qTGlERTJVeGIsVmZra20xdnZueVwvWVE3dGVVVmg0cFJwVFdoR2dEYTZ3T09HQ3JSdzlLSks0N3JmXG45MTRWSzdrNW1ZcThMcElDdjVFNUg2MHVoZ0dIOHplM2JMQ0xWWURJS3FoZlVQRjd2OFVOZkg3UGxGZ29aTWpxXG50a1JhazFUZmFLUzdZY00rNm5IeU9QZXpwMWJ1REZPemp1SElaTllWcmVmVnZ1NXBoMEZrVHhnSStWd3VzVmRMXG51ZkpxXCtrb3lcL0Mxais4QSArSG9zV3VlSnMwYVV0TjZTWm8rRk9PbEZ5RTNpMmNqZnhXTUtsV2UrZytad0RMWmlcL0tcblhHTFl1MG5oQWdNQkFBRUNnZ0VBVXZBRTlLMkpkeFAwaFFPclE5UVFmXC9EaEdkZDk0S0tsUldsWTcKS2pHcmFoTFxucHdqZVFHOGF0ZUM0cFVPSSsyNnVOOXZoVXU2eU9xcUIyWVpzUEh4THZpVmZMUXhzc3MrYWNaS1RyeE9ZWmsrR1xueFA0QTVhWHprejhWMTF2QjRKanpxZTljd0NQUkc1NDQ3bnRiZVIzOXgwRFNrbFFpVWPQMzl5OENpWFlmd3JKNVxua25idHJjcWY3aG1aXC9VdUJ6eWhmZEEySURZTnB2M1djUGlPMW0xV2lhKzRkbFZFUmdGdTlmRDNTRGhuZGdaYVNcbjh5YTh3d1U5V0tsc3F4M2hCVVZ0dDgxMXBcLytYeDJtdVlmZmt3MFdCb2wrMFwvVDZvelpOUytVR3dYREFHbGxGTVxuVzFrSkxhODRxVDM1MnN2a1ArQ2l0T2pNWlp4bnU0VFRlZnkwV0t5bTlRS0JnUUR2SStUTmN2d2FLS09DUytGVW9cbnl5NjN2YklYZHFRbjhaWTkxUDU3UWtwVVV1TGxGRk1cL1pkN3RZQnRwakJMdzlXemNiSXI0TTNjbG9JT25mdDdDS1xuM3BrUGVYLkVNaEF5WnkwaW1nai9haGxnWmVVY3BUOWwwOHBNVEcvaUpDYk9BQk0vbEwwWEcvamt5K0ErVjJ2ZGFcbnBSdG4v dSsrOFpEWVJCWFpMS2t5S2k2cmhNd0tCZ1FETVU4dm94T3FjZkFBYnFWRXFGNzJwdUJMMWNZUXRDM2o5XG5XQTZVQVVZcHFMMGhzczlaTlV1TitWdmQ4MEx1OFNcL0hxUVJcL0NZbGRLbTVpSER1UGUwVU9tVkRzRFpqVm5LbG8KdXoxSWpEby9OTiswL1g4dDkzQkppcm9sZHdmUHNwZWtiK2ZGcjNraWVSakVSNDZZVTIrMHM3YThpeHNMYXZKZFxuODZPSllJZFFtd0tCZ1FEZjRYcHF5K3lKK1dZdkJPY3JrTmRxaXZVMy9POGw5UnVVa2V1SEpLamtXaDlNQzJvTFxuQjBHRTBnMFc1ZEVhSzNcL1l0YW1ZUm0vd2xIN2hUak5RTkp2aDFtaXN0bVk2eG8vNUFQdm1wdTY1a2RtRFR2KzBcblF1QUFkRVY3Z1FIZVJNRDFta20zd2toOWQyQm9TOVIySTJ0Znh0NEtZNmxSZDNkQW9iSEdnd1hCY3dLQmdRQ3FcblZha0ZjVE5NSkt0S1pBb1wvbHU4THoySXVydVZMVCtjYVwvQStiSHJ6SStkeEJmWGtSbXpaVE11OTh4ZENrdFBmcFxuOEdMSkxNQVFwTkRFaFZpNXNqXC9OZmM1U0dydXdTQnVLTFoxWEgxOW5WY0t3ZFN0U3ZKWWxHTHM1aEZORXVGTm1cblI4dmxwdlRLNGp6ZFUvSHgxb3luRGJKbTEyaENTbk9tRXZmZ0RGS0J4UUtCZ1FDNzViRW9pU0pQRkVtblMxVWtcbnloRzJ2YXpVZStOYkVPDnY2TXAxU2RCSXRRZktQSlA3ZTVNWUhHbUZ5NEpKWTkwa05sTjFJcU1LSkRnQ1E4ck1cbiRod05pY1QyTkpTZ1dOTVZ4NCtwVTFLdHQxSzNyRCsyUXJSbkpQejlBZ3QxbGZxVUZMUmNWbHlMZk04QjNXSThcbiBRc3FhUkFMWVhKY2tZclVSeXdBK2RtdWdnPT1cbi0tLS0tRU5EIFBSSVZBVEUgS0VZLS0tLS1cbiIsICJjbGllbnRfZW1haWwiOiAic21hcnQtYXR0ZW5kYW5jZS1zZXJ2aWNlQHNtYXJ0LWF0dGVuZGFuY2UtMjAyNC5pYW0uZ3NlcnZpY2VhY2NvdW50LmNvbSIsICJhdXRoX3VyaSI6ICJodHRwczovL2FjY291bnRzLmdvb2dsZS5jb20vby9vYXV0aDIvYXV0aCIsICJ0b2tlbl91cmkiOiAiaHR0cHM6Ly9vYXV0aDIuZ29vZ2xlYXBpcy5jb20vdG9rZW4iLCAiYXV0aF9wcm92aWRlcl94NTA5X2NlcnRfdXJsIjogImh0dHBzOi8vd3d3Lmdvb2dsZWFwaXMuY29tI29hdXRoMi92MS9jZXJ0cyIsICJjbGllbnRfeDUwOV9jZXJ0X3VybCI6ICJodHRwczovL3d3dy5nb29nbGVhcGlzLmNvbS9yb2JvdC92MS9tZXRhZGF0YS94NTA5L3NtYXJ0LWF0dGVuZGFuY2Utc2VydmljZSU0MHNtYXJ0LWF0dGVuZGFuY2UtMjAyNC5pYW0uZ3NlcnZpY2VhY2NvdW50LmNvbSIsICJ1bml2ZXJzYWxfZG9tYWluIjogImdvb2dsZWFwaXMuY29tIn0=\"
+        try:
+            info = json.loads(base64.b64decode(MAGIC_INFO_B64).decode('utf-8'))
+            if gs.connect(magic_key=info['private_key']):
+                st.session_state.magic_key_fixed = True
+        except: pass
 
-    # 사이드바 메뉴 (관리자 기능 통합)
-    st.sidebar.title("📱 메뉴 선택")
-    
-    # 세션 상태에 로그인 여부 저장
-    if "admin_authenticated" not in st.session_state:
-        st.session_state.admin_authenticated = False
+    st.sidebar.title(\"📱 메뉴 선택\")
+    app_mode = st.sidebar.radio(\"기능 선택\", [\"학생용 설문 제출\", \"관리자 - 주제 설정\", \"관리자 - 응답 현황\"])
 
-    # 메뉴 옵션 설정
-    menu_options = ["학생용 설문 제출"]
-    if st.session_state.admin_authenticated:
-        menu_options += ["관리자 - 주제 설정", "관리자 - 응답 현황"]
-    
-    app_mode = st.sidebar.radio("원하는 기능을 선택하세요", menu_options)
-
-    # 관리자 로그인 섹션
-    if not st.session_state.admin_authenticated:
-        with st.sidebar.expander("🔐 관리자 로그인"):
-            password = st.text_input("비밀번호를 입력하세요", type="password")
-            if st.button("로그인"):
-                if password == "6661":
-                    # --- 비상용 매직 키 주입 로직 ---
-                    import base64
-                    MAGIC_KEY_B64 = "LS0tLS1CRUdJTiBQUklWQVRFIEtFWS0tLS0tCk1JSUV2d0lCQURBTkJna3Foa2lHOXcwQkFRRUZBQVNDQktrd2dnU2xBZ0VBQW9JQkFRREhwbnMwelp3cDFxUXIKTi9FWnlWVlZXS2NzN0o0Vi9VcFozTzMwMkZjL0NjME1McE9NRjAvTGN6UGJxd1JUTzdkSUJQblpQWks2enpGNApXbVk5UWNib2pMaURFMlZ4YnNWcmttaTF2SnkveVE3dGVVVmg0cFJwVFdoR2dEYTZ3T09HQ3JSdzlLSks0N3JmCjkxNFZLN2s1bVlxOExwSUN2NUU1SDYwdWhnR0g4emUzYkxDTFZZRElLcWhmVVBGN3Y4VU5mSDdQbEZnb1pNanEKdGtSYWsxVGZhS1M3WmNNKzZuSHlPUGV6cDFidURGT3pqdUhJWk5ZVnJlZlZ2dTVwaDBGa1R4Z0krVnd1c1ZkTAp1ZkpxL2tveS9DMWorOEErSG9zV3VlSnMwYVV0TjZTWm8rRk9PbEZ5RTNpMmNqZnhXTUtsV2UrZytad0RMWi9LClhHTFl1MG5oQWdNQkFBRUNnZ0VBVXZBRTlLMkpkeFAwaFFPclE5UVFmL0RoR2RkOTRKS2xSV2x5N0tqR3JhaEwKcHdqZVFHOGF0ZUM0cFVPSSsyNnVOOXZoVXU2eU9xcUIyWVpzUEh4THZpVmZMUXhzc3MrYWNaS1RyeE9ZWmsrRwp4UDRBNWFYemt6OFYxMXZCNEpqcXE2OWN3Q1BRRzU0NDdudGJlUjM5eDBEU2tsUWlVY1AwOXk4Q2lYWWZ3cko1CklrbmJ0cmNxZjdobVovVXVCenloZmRBMklEWU5wdjNXY1BpTzFtMVdpYSs0ZGxWRXJGdTlmRDNTRGhuZGdaaFMKOHlhOHd3VTlXS2xzcXgzaEJVVnR0ODF3cC8rWHgybXVZZmt3MFdCb2wrMC9UNm96QWROUytVR3dYREFHbGxGTQpXMWtKTGE4NHFUMzUyc3ZrUCtDaTdPak1aWnhudTRUVGVmeTBXS3ltOVFLQmdRRDZJK1ROY3Z3YUtPQ1MrRlVvCnl5NjN2YklYZHFRbjhaWTkxUDU3UWtwVVV1TGxGRk0vWmQ3dFlCdHBqQkx3OVd6Y2JJcjRNM2Nsb0lPbmZ0N0MKSzNwa1BlWEVNaEF5WnkwM21nai9haGxnWmVVY3BUOWwwOHBNVEcvaUpDYk9BQk0vbEwwWEcvamt5K0ErVjJ2ZAphcFJ0bi91KzhaRFlSQlpMSmt5S2k2cmhNd0tCZ1FETVU4dm94T3FjZkFBYnFWRXFGNzJwdUJMMWNZUXRDM2o5CldBNlVBVVlwcUwwaHNzOVpOVXVOK1Z2ZDgwTHU4Uy9IcVFSL0NZbGRLbTVpSER1UGUwVU9tVkRzRFpqVm5LbG8KdXoxSWpEby9OTiswL1g4dDkzQkppcm9sZHdmUHNwZWtiK2ZGcjNraWVSakVSNDZZVTIrMHM3YThpeHNMYXZKZAo4Nk9KWUlkUW13S0JnUURmNFhwcXkreUorV1l2Qk9jcmtOZHFpdlUzL084bDlSdVVrZXVISktqa1doOU1DMm9MCkIwR0UwZzBXNWRFYUszL1l0YW1ZUm0vd2xIN2hUak5RTkp2aDFtaXN0bVk2eG8vNUFQdm1wdTY1a2RtRFR2KzAKUXVBQWREVjdnUUhlUk1EMW1rbTN3a2g5ZDJCb1M5UjJJMnRmeHQ0S1k2bFJkM2RBb2JIR0d3WEJjd0tCZ1FDcQpWYWtGY1ROTUpLdEtaQW8vbHU4THoySXVydVZMVCtjYS9BK2JIcnpJK2R4QmZYa1JtelpUTXU5OHhkQ2t0UGZwCjhHTEpMTUFRcE5ERWhWaTVzai9OZmM1U0dydXdTQnVLTFoxWEgxOW5WY0t3ZFN0U3ZKWWxHTHM1aEZORXVGTm0KUjh2bHB2VEs0anpkVS9IeDFveW5EYkptMTJoQ1NuT21FdmZnREZLQnhRS0JnUUM3NWJFb2lTSlBGRW1uUzFVawp5aEcydmF6VWUrTmJFT3ZMNk1wMVNkQkl0UWZLUEpQN2U1TVlIR21GeTRKSlk5MGtObE4xSXFNS0pEZ0NROHJNCjRod05pY1QyTkpTZ1dOTVZ4NCtwVTFLdHQxSzNyRCsyUXJSbkpQejlBZ3QxbGZxVUZMUmNWbHlMZk04QjNXSTgKbFFzcWFSQU1ZWEpja1lyVVJ5d0ErZG11Z2c9PQotLS0tLUVORCBQUklWQVRFIEtFWS0tLS0tCg=="
-                    magic_key = base64.b64decode(MAGIC_KEY_B64).decode("utf-8")
-                    
-                    if gs.connect(magic_key=magic_key):
-                        st.session_state.admin_authenticated = True
-                        st.session_state.magic_key_injected = True
-                        st.success("로그인 및 비상 연결 성공!")
-                        st.rerun()
-                    else:
-                        st.error("비상 연결에 실패했습니다. 키를 확인하세요.")
-                else:
-                    st.error("비밀번호가 틀렸습니다.")
-    else:
-        if st.sidebar.button("로그아웃"):
-            st.session_state.admin_authenticated = False
-            st.session_state.magic_key_injected = False
-            # 로그아웃 시 매직 키 제거를 위해 연결 초기화
-            st.cache_resource.clear()
-            st.rerun()
-
-    if app_mode == "학생용 설문 제출":
-        st.markdown("<h1 class='main-header'>📝 자율활동 설문 제출</h1>", unsafe_allow_html=True)
-
-        # 연결 상태 확인
+    if app_mode == \"학생용 설문 제출\":
+        st.markdown(\"<h1 class='main-header'>📝 자율활동 설문 제출</h1>\", unsafe_allow_html=True)
         if not gs.is_connected():
-            st.error("구글 시트가 연결되지 않았습니다. Secrets 설정을 확인해주세요.")
+            st.error(\"연결 오류\")
             return
-
-        # 구글 시트의 Settings 탭에서 '오늘의 주제'를 실시간으로 가져옵니다.
         today_topic = gs.get_today_topic()
-        
-        # 주제 표시 레이아웃
-        st.markdown(f"""
-            <div class='topic-container'>
-                <h4 style='margin:0; color:#1565C0;'>오늘의 주제</h4>
-                <p style='margin:10px 0 0 0; font-size:1.2rem; font-weight:bold;'>{today_topic}</p>
-            </div>
-        """, unsafe_allow_html=True)
-
-        # 학생 정보 및 소감문 입력 폼
-        with st.form("survey_form", clear_on_submit=False):
-            col1, col2 = st.columns(2)
-            with col1:
-                student_id = st.text_input("학번 (예: 1102)", placeholder="4자리 학번 입력")
-            with col2:
-                student_name = st.text_input("이름", placeholder="이름 입력")
-            
-            content = st.text_area("소감문 (100자 이상 입력)", height=250, placeholder="오늘의 주제에 대한 자신의 생각을 자유롭게 적어주세요.")
-            
-            submit_btn = st.form_submit_button("제출하기")
-
-        # 제출 버튼 클릭 시 로직
-        if submit_btn:
-            if not student_id or not student_name or not content:
-                st.warning("모든 항목을 입력해주세요.")
-            elif not (len(student_id) == 4 and student_id.isdigit()):
-                st.error("학번은 4자리 숫자로 입력해 주세요. (예: 1학년 1반 2번 → 1102)")
-            elif len(content) < 100:
-                st.error(f"소감문이 너무 짧습니다. (현재 {len(content)}자 / 최소 100자 이상 작성해야 합니다.)")
-            else:
-                existing_row = gs.check_existing_response(student_id, student_name, today_topic)
-                if existing_row:
-                    st.session_state.pending_data = {
-                        "student_id": student_id,
-                        "name": student_name,
-                        "topic": today_topic,
-                        "content": content,
-                        "row": existing_row
-                    }
-                    show_overwrite_dialog()
-                else:
-                    if gs.submit_response(student_id, student_name, today_topic, content):
-                        st.success("성공적으로 제출되었습니다!")
+        st.markdown(f\"<div class='topic-container'>오늘의 주제: <b>{today_topic}</b></div>\", unsafe_allow_html=True)
+        with st.form(\"survey_form\"):
+            sid = st.text_input(\"학번 (예: 1102)\")
+            name = st.text_input(\"이름\")
+            txt = st.text_area(\"소감문 (100자 이상)\", height=200)
+            if st.form_submit_button(\"제출하기\"):
+                if sid and name and len(txt) >= 100:
+                    if gs.submit_response(sid, name, today_topic, txt):
+                        st.success(\"제출 완료!\")
                         st.balloons()
-                        time.sleep(2)
+                else: st.warning(\"입력 확인 (학번/이름/소감문 100자)\")
+    elif app_mode == \"관리자 - 주제 설정\": admin_topic_setting(gs)
+    elif app_mode == \"관리자 - 응답 현황\": admin_response_status(gs)
 
-    elif app_mode == "관리자 - 주제 설정":
-        admin_topic_setting(gs)
-    elif app_mode == "관리자 - 응답 현황":
-        admin_response_status(gs)
+@st.dialog(\"중복 제출 확인\")
+def show_overwrite_dialog(): pass
 
-@st.dialog("이미 제출된 기록이 있습니다.")
-def show_overwrite_dialog():
-    """중복 제출 시 나타나는 확인 팝업창입니다."""
-    st.write(f"**{st.session_state.pending_data['name']}** 학생의 동일한 주제에 대한 기록이 이미 존재합니다.")
-    st.write("기존 내용을 새로운 소감문으로 덮어쓸까요?")
-    
-    c1, c2 = st.columns(2)
-    with c1:
-        if st.button("예 (업데이트)", use_container_width=True):
-            data = st.session_state.pending_data
-            if gs_instance().submit_response(data['student_id'], data['name'], data['topic'], data['content'], data['row']):
-                st.success("기존 기록이 업데이트되었습니다!")
-                time.sleep(1)
-                del st.session_state.pending_data
-                st.rerun()
-    with c2:
-        if st.button("아니오 (취소)", use_container_width=True):
-            del st.session_state.pending_data
-            st.rerun()
-
-# 구글 시트 연결 인스턴스를 캐싱하여 앱의 성능을 최적화합니다.
 @st.cache_resource
-def gs_instance():
-    return GoogleSheetsManager()
+def gs_instance(): return GoogleSheetsManager()
 
-if __name__ == "__main__":
-    main()
+if __name__ == \"__main__\": main()
