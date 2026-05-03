@@ -6,40 +6,17 @@ from datetime import datetime
 class GoogleSheetsManager:
     """
     구글 스프레드시트와 데이터를 주고받는 핵심 로직을 담당하는 클래스입니다.
-    Streamlit의 GSheetsConnection을 사용하여 보안성과 안정성을 높였습니다.
+    가장 안정적인 Streamlit 공식 연결 방식을 사용합니다.
     """
     def __init__(self):
         try:
-            # 1. secrets에서 정보를 가져와서 수동으로 키를 청소합니다.
-            if "connections" in st.secrets and "gsheets" in st.secrets["connections"]:
-                secret_info = dict(st.secrets["connections"]["gsheets"])
-                if "private_key" in secret_info:
-                    pk = secret_info["private_key"]
-                    # 모든 종류의 줄바꿈 예외 처리
-                    pk = pk.replace("\\n", "\n").replace("\\\\n", "\n")
-                    secret_info["private_key"] = pk.strip()
-                
-                # 2. 청소된 정보를 바탕으로 연결 시도
-                # secret_info에 있는 'type'은 구글 서비스 계정용이므로, st.connection의 'type' 인자와 충돌 방지를 위해 제거합니다.
-                if "type" in secret_info:
-                    secret_info.pop("type")
-                
-                self.conn = st.connection("gsheets", type=GSheetsConnection, **secret_info)
-                self.spreadsheet_id = st.secrets["spreadsheet_id"]
-                self.sheet_url = f"https://docs.google.com/spreadsheets/d/{self.spreadsheet_id}/edit"
-                self.connected = True
-                
-                # 성공 시에도 확인용으로 아주 작게 표시 (나중에 삭제)
-                st.caption(f"✓ 연결됨 (Key: {len(secret_info.get('private_key', ''))})")
-            else:
-                st.error("Secrets 설정에 [connections.gsheets] 섹션이 없습니다.")
-                self.connected = False
+            # 별도의 복잡한 인자 전달 없이, secrets의 [connections.gsheets] 섹션을 자동으로 읽도록 합니다.
+            self.conn = st.connection("gsheets", type=GSheetsConnection)
+            self.spreadsheet_id = st.secrets["spreadsheet_id"]
+            self.sheet_url = f"https://docs.google.com/spreadsheets/d/{self.spreadsheet_id}/edit"
+            self.connected = True
         except Exception as e:
-            pk_info = ""
-            if "connections" in st.secrets and "gsheets" in st.secrets["connections"]:
-                pk = st.secrets["connections"]["gsheets"].get("private_key", "")
-                pk_info = f" | KeyLen: {len(pk)}"
-            st.error(f"[V2-Fix] 구글 시트 연결 실패: {e}{pk_info}")
+            st.error(f"구글 시트 연결 실패: {e}")
             self.connected = False
 
     def is_connected(self):
@@ -50,9 +27,7 @@ class GoogleSheetsManager:
         """Settings 탭에서 현재 설정된 '오늘의 주제' 값을 가져옵니다."""
         if not self.connected: return "연결 오류"
         try:
-            # Settings 시트 읽기
             df = self.conn.read(spreadsheet=self.sheet_url, worksheet="Settings", ttl=0)
-            # 'Key' 열이 'today_topic'인 행의 'Value'를 가져옵니다.
             topic = df[df["Key"] == "today_topic"]["Value"].values[0]
             return topic
         except Exception:
@@ -62,11 +37,8 @@ class GoogleSheetsManager:
         """관리자가 입력한 새로운 주제를 Settings 탭에 저장합니다."""
         if not self.connected: return False
         try:
-            # 현재 데이터 읽기
             df = self.conn.read(spreadsheet=self.sheet_url, worksheet="Settings", ttl=0)
-            # 값 변경
             df.loc[df["Key"] == "today_topic", "Value"] = topic
-            # 시트 업데이트
             self.conn.update(spreadsheet=self.sheet_url, worksheet="Settings", data=df)
             return True
         except Exception as e:
@@ -85,7 +57,6 @@ class GoogleSheetsManager:
                        (df['주제'] == topic)]
             
             if not match.empty:
-                # 행 번호 반환 (헤더 제외, 0부터 시작하므로 +2)
                 return int(match.index[0] + 2)
             return None
         except Exception:
@@ -95,21 +66,17 @@ class GoogleSheetsManager:
         """학생의 응답을 시트에 저장합니다."""
         if not self.connected: return False
         try:
-            # 현재 데이터 읽기
             df = self.conn.read(spreadsheet=self.sheet_url, worksheet="Responses", ttl=0)
             now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             
             if row_to_update:
-                # 기존 행 업데이트 (index는 row-2)
                 idx = row_to_update - 2
                 df.iloc[idx] = [str(student_id), name, topic, content, now]
             else:
-                # 새 행 추가
                 new_data = pd.DataFrame([[str(student_id), name, topic, content, now]], 
                                        columns=['학번', '이름', '주제', '소감문', '제출시간'])
                 df = pd.concat([df, new_data], ignore_index=True)
             
-            # 시트 전체 업데이트
             self.conn.update(spreadsheet=self.sheet_url, worksheet="Responses", data=df)
             return True
         except Exception as e:
